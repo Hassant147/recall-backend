@@ -25,7 +25,7 @@ from rest_framework import permissions
 from django.views.static import serve
 
 # Explicitly set the schema URL to HTTPS
-schema_url = "https://recall-web-backend-3cytq.ondigitalocean.app"
+schema_url = "https://recall-new-web-backend-xohu6.ondigitalocean.app"
 
 schema_view = get_schema_view(
     openapi.Info(
