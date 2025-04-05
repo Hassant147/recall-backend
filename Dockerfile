@@ -28,8 +28,9 @@ COPY . .
 # Create directories for static and media files
 RUN mkdir -p /app/staticfiles /app/media
 
-# Collect static files
-RUN python manage.py collectstatic --noinput || echo "Static files not collected, will be done at runtime"
+# Ensure correct permissions before collecting static
+RUN chmod -R 755 /app/staticfiles
+RUN chmod +x /app/start.sh
 
 # Run as non-root user for better security
 RUN useradd -m appuser
@@ -43,5 +44,5 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
   CMD curl -f http://localhost:8000/ || exit 1
 
-# Set default command
-CMD ["gunicorn", "Search.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3", "--timeout", "120"] 
+# Set default command to use the start script
+CMD ["/app/start.sh"] 

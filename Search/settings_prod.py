@@ -33,9 +33,16 @@ else:
         }
     }
 
-# Whitenoise for static files
+# Whitenoise for static files - must be first in middleware after SecurityMiddleware
 MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')
+
+# Configure static files properly for production
+STATIC_URL = '/static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+# Enable whitenoise to serve files in debug mode as well
+WHITENOISE_USE_FINDERS = DEBUG
 
 # CORS settings for secure connections
 CORS_ALLOW_ALL_ORIGINS = False
@@ -56,10 +63,6 @@ SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 SECURE_SSL_REDIRECT = True
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
-
-# Static files
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-STATIC_URL = '/static/'
 
 # Logging
 LOGGING = {
