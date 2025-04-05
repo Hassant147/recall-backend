@@ -18,7 +18,7 @@ Including another URLconf
 from django.conf import settings
 from django.contrib import admin
 from django.urls import path, include, re_path
-from django.views.generic import RedirectView, TemplateView
+from django.views.generic import RedirectView
 from drf_yasg import openapi
 from drf_yasg.views import get_schema_view
 from rest_framework import permissions
@@ -42,25 +42,12 @@ schema_view = get_schema_view(
     schemes=['https'],
 )
 
-# Custom Swagger UI view with our template
-class SwaggerUIView(TemplateView):
-    template_name = 'swagger/index.html'
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        schema_url = self.request.build_absolute_uri().split('/swagger/')[0]
-        # Force HTTPS
-        if schema_url.startswith('http:'):
-            schema_url = schema_url.replace('http:', 'https:')
-        context['schema_url'] = f"{schema_url}/swagger.json"
-        return context
-
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/accounts/", include("accounts.urls")),
     path("swagger.json", schema_view.without_ui(cache_timeout=0), name="schema-json"),
     path("swagger.yaml", schema_view.without_ui(cache_timeout=0), name="schema-yaml"),
-    path("swagger/", SwaggerUIView.as_view(), name="schema-swagger-ui"),
+    path("swagger/", schema_view.with_ui("swagger", cache_timeout=0), name="schema-swagger-ui"),
     path("redoc/", schema_view.with_ui("redoc", cache_timeout=0), name="schema-redoc"),
     # Default route for root URL - redirect to Swagger
     path("", RedirectView.as_view(url='/swagger/', permanent=False), name="api-root"),

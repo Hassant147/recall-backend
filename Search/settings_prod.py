@@ -114,6 +114,10 @@ SWAGGER_SETTINGS = {
         'patch',
     ],
     'SCHEMES': ['https'],
+    # Force relative URLs for all API paths to use HTTPS
+    'USE_SESSION_AUTH': False,
+    'DEFAULT_MODEL_RENDERING': 'model',
+    'DOC_EXPANSION': 'list',
 }
 
 # Email - ensure emails work in production
