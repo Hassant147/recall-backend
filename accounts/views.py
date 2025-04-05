@@ -44,7 +44,32 @@ from .serializers import (
 load_dotenv()
 EMPLOYEE_LIMIT = int(os.getenv("EMPLOYEE_LIMIT", 10))
 stripe.api_key = settings.STRIPE_SECRET_KEY
-redis_client = redis.StrictRedis(host="localhost", port=6379, db=0, decode_responses=True)
+
+# Initialize Redis with better error handling
+try:
+    redis_client = redis.StrictRedis(host="localhost", port=6379, db=0, decode_responses=True)
+    # Test the connection
+    redis_client.ping()
+    print("Redis connected successfully")
+except Exception as e:
+    print(f"Redis connection error: {str(e)}")
+    # Use a dummy Redis client that doesn't fail when methods are called
+    class DummyRedis:
+        def setex(self, *args, **kwargs): 
+            print("DummyRedis: setex called")
+            return True
+        def get(self, *args, **kwargs): 
+            print("DummyRedis: get called")
+            return None
+        def delete(self, *args, **kwargs): 
+            print("DummyRedis: delete called")
+            return True
+        def ping(self, *args, **kwargs): 
+            print("DummyRedis: ping called")
+            return True
+    redis_client = DummyRedis()
+    print("Using DummyRedis as fallback")
+
 User = get_user_model()
 
 CustomUser = get_user_model()
