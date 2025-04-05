@@ -18,18 +18,14 @@ Including another URLconf
 from django.conf import settings
 from django.contrib import admin
 from django.urls import path, include, re_path
-from django.views.generic import RedirectView
+from django.views.generic import RedirectView, TemplateView
 from drf_yasg import openapi
 from drf_yasg.views import get_schema_view
 from rest_framework import permissions
 from django.views.static import serve
 
-# Get the domain for the schema URL
-schema_url = None
-if not settings.DEBUG:
-    allowed_host = settings.ALLOWED_HOSTS[0] if settings.ALLOWED_HOSTS and settings.ALLOWED_HOSTS[0] != '*' else None
-    if allowed_host:
-        schema_url = f"https://{allowed_host}"
+# Explicitly set the schema URL to HTTPS
+schema_url = "https://recall-web-backend-3cytq.ondigitalocean.app"
 
 schema_view = get_schema_view(
     openapi.Info(
@@ -43,13 +39,28 @@ schema_view = get_schema_view(
     public=True,
     permission_classes=(permissions.AllowAny,),
     url=schema_url,
+    schemes=['https'],
 )
+
+# Custom Swagger UI view with our template
+class SwaggerUIView(TemplateView):
+    template_name = 'swagger/index.html'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        schema_url = self.request.build_absolute_uri().split('/swagger/')[0]
+        # Force HTTPS
+        if schema_url.startswith('http:'):
+            schema_url = schema_url.replace('http:', 'https:')
+        context['schema_url'] = f"{schema_url}/swagger.json"
+        return context
 
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/accounts/", include("accounts.urls")),
-    re_path(r"^swagger(?P<format>\.json|\.yaml)$", schema_view.without_ui(cache_timeout=0), name="schema-json"),
-    path("swagger/", schema_view.with_ui("swagger", cache_timeout=0), name="schema-swagger-ui"),
+    path("swagger.json", schema_view.without_ui(cache_timeout=0), name="schema-json"),
+    path("swagger.yaml", schema_view.without_ui(cache_timeout=0), name="schema-yaml"),
+    path("swagger/", SwaggerUIView.as_view(), name="schema-swagger-ui"),
     path("redoc/", schema_view.with_ui("redoc", cache_timeout=0), name="schema-redoc"),
     # Default route for root URL - redirect to Swagger
     path("", RedirectView.as_view(url='/swagger/', permanent=False), name="api-root"),

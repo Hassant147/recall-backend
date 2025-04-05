@@ -1,0 +1,92 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>{% block title %}Recall API Documentation{% endblock %}</title>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/4.1.0/swagger-ui.css" />
+    <style>
+      html {
+        box-sizing: border-box;
+        overflow: -moz-scrollbars-vertical;
+        overflow-y: scroll;
+      }
+      
+      *,
+      *:before,
+      *:after {
+        box-sizing: inherit;
+      }
+      
+      body {
+        margin:0;
+        background: #fafafa;
+      }
+      
+      /* Custom styles for the header */
+      .swagger-ui .topbar {
+        background-color: #2c3e50;
+      }
+      
+      /* Improved button styling */
+      .swagger-ui .btn.execute {
+        background-color: #2c3e50;
+        color: white;
+      }
+      
+      .swagger-ui .btn.execute:hover {
+        background-color: #1a242f;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="swagger-ui"></div>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/4.1.0/swagger-ui-bundle.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/4.1.0/swagger-ui-standalone-preset.js"></script>
+    
+    <script>
+    window.onload = function() {
+      // Fix for Swagger UI to always use HTTPS
+      var currentUrl = window.location.href;
+      var baseUrl = currentUrl.split('/swagger/')[0];
+      
+      // Force to HTTPS
+      if (baseUrl.startsWith('http:')) {
+        baseUrl = baseUrl.replace('http:', 'https:');
+      }
+      
+      const ui = SwaggerUIBundle({
+        url: "{{ schema_url }}",
+        dom_id: '#swagger-ui',
+        deepLinking: true,
+        presets: [
+          SwaggerUIBundle.presets.apis,
+          SwaggerUIStandalonePreset
+        ],
+        plugins: [
+          SwaggerUIBundle.plugins.DownloadUrl
+        ],
+        layout: "StandaloneLayout",
+        validatorUrl: null,
+        displayRequestDuration: true,
+        docExpansion: "list",
+        filter: true,
+        requestInterceptor: function(request) {
+          // Force HTTPS in all requests
+          if (request.url.startsWith('http:')) {
+            request.url = request.url.replace('http:', 'https:');
+          }
+          return request;
+        },
+        responseInterceptor: function(response) {
+          return response;
+        }
+      });
+      
+      window.ui = ui;
+    }
+    </script>
+  </body>
+</html> 

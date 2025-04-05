@@ -28,11 +28,20 @@ CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOWED_ORIGINS = [
     f"https://{host}" for host in ALLOWED_HOSTS if host != '*'
 ]
+# Add specific domain
+CORS_ALLOWED_ORIGINS.append("https://recall-web-backend-3cytq.ondigitalocean.app")
+
 if os.getenv('FRONTEND_URL'):
     CORS_ALLOWED_ORIGINS.append(os.getenv('FRONTEND_URL'))
 
 # Allow credentials
 CORS_ALLOW_CREDENTIALS = True
+
+# SSL/HTTPS Settings
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+SECURE_SSL_REDIRECT = True
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
 
 # Static files
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
@@ -69,9 +78,6 @@ LOGGING = {
 }
 
 # Security settings
-SECURE_SSL_REDIRECT = os.getenv('SECURE_SSL_REDIRECT', 'True').lower() == 'true'
-SESSION_COOKIE_SECURE = os.getenv('SESSION_COOKIE_SECURE', 'True').lower() == 'true'
-CSRF_COOKIE_SECURE = os.getenv('CSRF_COOKIE_SECURE', 'True').lower() == 'true'
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = 'DENY'
