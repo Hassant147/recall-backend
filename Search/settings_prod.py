@@ -21,19 +21,17 @@ try:
         parsed = urllib.parse.urlparse(DATABASE_URL)
         print(f"Using database at {parsed.hostname}:{parsed.port}")
         
-        # Add explicit options to force TCP connection
+        # Parse the DATABASE_URL using dj_database_url correctly
         DATABASES = {
             'default': dj_database_url.config(
                 default=DATABASE_URL,
                 conn_max_age=600,
                 conn_health_checks=True,
-                engine='django.db.backends.postgresql',
-                ssl_require=True,
-                options='-c search_path=public -c statement_timeout=90000'
+                ssl_require=True
             )
         }
         
-        # Set OPTIONS explicitly as well
+        # Set OPTIONS separately after creating the connection
         DATABASES['default']['OPTIONS'] = {
             'sslmode': 'require',
             'connect_timeout': 30,
