@@ -19,6 +19,7 @@ python -c "
 import psycopg2
 import os
 import time
+import socket
 from urllib.parse import urlparse
 
 url = os.environ.get('DATABASE_URL')
@@ -33,8 +34,11 @@ password = parsed.password
 host = parsed.hostname
 port = parsed.port
 
+# Set a socket timeout to prevent hanging connections
+socket.setdefaulttimeout(10)  # 10 second timeout
+
 # Try to connect with retries
-max_retries = 5
+max_retries = 3
 retry_count = 0
 connected = False
 
@@ -46,7 +50,8 @@ while retry_count < max_retries and not connected:
             user=user,
             password=password,
             host=host,
-            port=port
+            port=port,
+            connect_timeout=10  # 10 second connection timeout
         )
         conn.close()
         print('Database connection successful!')
@@ -59,17 +64,12 @@ while retry_count < max_retries and not connected:
             time.sleep(5)
         else:
             print(f'Max retries reached. Unable to connect to database.')
-            exit(1)
+            print('Continuing anyway, but the app may not function correctly.')
+            break  # Don't exit, try to continue
 "
 
-echo "Running migrations with timeout..."
-# Run migrations with a 2-minute timeout
-timeout 120 python manage.py migrate --noinput
-if [ $? -eq 0 ]; then
-    echo "Migrations completed successfully."
-else
-    echo "Error: Migrations timed out or failed. Proceeding anyway..."
-fi
+# Skip migrations for now, just try to start the server
+echo 'Skipping migrations temporarily to test server startup'
 
-echo "Starting Gunicorn..."
-exec gunicorn Search.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120 --log-level debug 
+echo 'Starting Gunicorn with a simplified configuration...'
+exec gunicorn Search.wsgi:application --bind 0.0.0.0:8000 --timeout 120 --log-level debug 

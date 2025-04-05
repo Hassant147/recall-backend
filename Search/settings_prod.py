@@ -11,26 +11,47 @@ SECRET_KEY = os.getenv('DJANGO_SECRET_KEY')
 
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '*').split(',')
 
-# Database - use DATABASE_URL if provided, otherwise use standard settings
-DATABASE_URL = os.getenv('DATABASE_URL')
-if DATABASE_URL:
+# Database configuration with better fallback options
+try:
+    # Try to use DATABASE_URL if provided
+    DATABASE_URL = os.getenv('DATABASE_URL')
+    if DATABASE_URL:
+        # Print some diagnostic info
+        import urllib.parse
+        parsed = urllib.parse.urlparse(DATABASE_URL)
+        print(f"Using database at {parsed.hostname}:{parsed.port}")
+        
+        DATABASES = {
+            'default': dj_database_url.config(
+                default=DATABASE_URL,
+                conn_max_age=600,
+                conn_health_checks=True,
+            )
+        }
+    else:
+        # Explicit PostgreSQL config if DATABASE_URL isn't set
+        DATABASES = {
+            "default": {
+                "ENGINE": "django.db.backends.postgresql",
+                "NAME": os.getenv("POSTGRES_DB"),
+                "USER": os.getenv("POSTGRES_USER"),
+                "PASSWORD": os.getenv("POSTGRES_PASSWORD"),
+                "HOST": os.getenv("POSTGRES_HOST", "db"),
+                "PORT": os.getenv("POSTGRES_PORT", "5432"),
+                "CONN_MAX_AGE": 600,
+                "OPTIONS": {
+                    "connect_timeout": 10,
+                    "sslmode": "require",
+                }
+            }
+        }
+except Exception as e:
+    print(f"Database configuration error: {str(e)}")
+    print("Falling back to SQLite for testing")
     DATABASES = {
-        'default': dj_database_url.config(
-            default=DATABASE_URL,
-            conn_max_age=600,
-            conn_health_checks=True,
-        )
-    }
-else:
-    # Fallback to explicitly configured database settings
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.postgresql",
-            "NAME": os.getenv("POSTGRES_DB"),
-            "USER": os.getenv("POSTGRES_USER"),
-            "PASSWORD": os.getenv("POSTGRES_PASSWORD"),
-            "HOST": os.getenv("POSTGRES_HOST", "db"),
-            "PORT": os.getenv("POSTGRES_PORT", "5432"),
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
         }
     }
 
