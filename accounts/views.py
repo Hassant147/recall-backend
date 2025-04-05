@@ -47,10 +47,13 @@ stripe.api_key = settings.STRIPE_SECRET_KEY
 
 # Initialize Redis with better error handling
 try:
-    redis_client = redis.StrictRedis(host="localhost", port=6379, db=0, decode_responses=True)
+    # Use environment variables for Redis connection
+    redis_host = os.getenv("REDIS_HOST", "localhost")
+    redis_port = int(os.getenv("REDIS_PORT", 6379))
+    redis_client = redis.StrictRedis(host=redis_host, port=redis_port, db=0, decode_responses=True)
     # Test the connection
     redis_client.ping()
-    print("Redis connected successfully")
+    print(f"Redis connected successfully to {redis_host}:{redis_port}")
 except Exception as e:
     print(f"Redis connection error: {str(e)}")
     # Use a dummy Redis client that doesn't fail when methods are called
