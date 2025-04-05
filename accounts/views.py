@@ -50,7 +50,28 @@ try:
     # Use environment variables for Redis connection
     redis_host = os.getenv("REDIS_HOST", "localhost")
     redis_port = int(os.getenv("REDIS_PORT", 6379))
-    redis_client = redis.StrictRedis(host=redis_host, port=redis_port, db=0, decode_responses=True)
+    redis_username = os.getenv("REDIS_USERNAME", "")
+    redis_password = os.getenv("REDIS_PASSWORD", "")
+    
+    # Create connection with credentials if provided
+    if redis_username and redis_password:
+        redis_client = redis.StrictRedis(
+            host=redis_host, 
+            port=redis_port, 
+            username=redis_username,
+            password=redis_password,
+            db=0, 
+            decode_responses=True,
+            ssl=True  # Digital Ocean Redis requires SSL
+        )
+    else:
+        redis_client = redis.StrictRedis(
+            host=redis_host, 
+            port=redis_port, 
+            db=0, 
+            decode_responses=True
+        )
+    
     # Test the connection
     redis_client.ping()
     print(f"Redis connected successfully to {redis_host}:{redis_port}")
