@@ -23,6 +23,17 @@ if DATABASE_URL:
 MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
+# CORS settings for secure connections
+CORS_ALLOW_ALL_ORIGINS = False
+CORS_ALLOWED_ORIGINS = [
+    f"https://{host}" for host in ALLOWED_HOSTS if host != '*'
+]
+if os.getenv('FRONTEND_URL'):
+    CORS_ALLOWED_ORIGINS.append(os.getenv('FRONTEND_URL'))
+
+# Allow credentials
+CORS_ALLOW_CREDENTIALS = True
+
 # Static files
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 STATIC_URL = '/static/'
@@ -67,6 +78,37 @@ X_FRAME_OPTIONS = 'DENY'
 SECURE_HSTS_SECONDS = 31536000  # 1 year
 SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 SECURE_HSTS_PRELOAD = True
+
+# Force HTTPS for Swagger
+SWAGGER_SETTINGS = {
+    'USE_SESSION_AUTH': False,
+    'SECURITY_DEFINITIONS': {
+        'Bearer': {
+            'type': 'apiKey',
+            'name': 'Authorization',
+            'in': 'header'
+        },
+        'SessionID': {
+            'type': 'apiKey',
+            'name': 'X-Session-ID',
+            'in': 'header'
+        }
+    },
+    'VALIDATOR_URL': None,
+    'OPERATIONS_SORTER': 'alpha',
+    'REFETCH_SCHEMA_WITH_AUTH': True,
+    'PERSIST_AUTH': True,
+    'REFETCH_SCHEMA_ON_LOGOUT': True,
+    'JSON_EDITOR': False,
+    'SUPPORTED_SUBMIT_METHODS': [
+        'get',
+        'post',
+        'put',
+        'delete',
+        'patch',
+    ],
+    'SCHEMES': ['https'],
+}
 
 # Email - ensure emails work in production
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'

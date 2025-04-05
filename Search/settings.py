@@ -167,6 +167,29 @@ CORS_EXPOSE_HEADERS = [
     'x-session-id',
 ]
 
+# Swagger settings for development
+SWAGGER_SETTINGS = {
+    'USE_SESSION_AUTH': False,
+    'SECURITY_DEFINITIONS': {
+        'Bearer': {
+            'type': 'apiKey',
+            'name': 'Authorization',
+            'in': 'header'
+        },
+        'SessionID': {
+            'type': 'apiKey',
+            'name': 'X-Session-ID',
+            'in': 'header'
+        }
+    },
+    'VALIDATOR_URL': None,
+    'OPERATIONS_SORTER': 'alpha',
+    'REFETCH_SCHEMA_WITH_AUTH': True,
+    'PERSIST_AUTH': True,
+    'REFETCH_SCHEMA_ON_LOGOUT': True,
+    'SCHEMES': ['http', 'https'],
+}
+
 # Add middleware to modify response headers if needed
 SECURE_REFERRER_POLICY = 'same-origin'
 
