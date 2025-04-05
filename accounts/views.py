@@ -75,6 +75,29 @@ class LoginView(APIView):
             email = serializer.validated_data["email"]
             password = serializer.validated_data["password"]
 
+            # Try to check if the email exists first to give a better error message
+            try:
+                from django.db import connections
+                connection = connections['default']
+                connection.ensure_connection()
+            except Exception as db_err:
+                return Response({
+                    "error": "Database connection error", 
+                    "details": f"The system is currently unable to connect to the database. Please try again later. Technical details: {str(db_err)}"
+                }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+            # Try to find the user
+            try:
+                user_exists = CustomUser.objects.filter(email=email).exists()
+                if not user_exists:
+                    return Response({"error": "Invalid email or password"}, status=status.HTTP_401_UNAUTHORIZED)
+            except Exception as e:
+                return Response({
+                    "error": "Authentication error", 
+                    "details": f"Could not verify account. Please try again later. Error: {str(e)}"
+                }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            
+            # Try to authenticate
             user = authenticate(request, email=email, password=password)
             if user is None:
                 raise AuthenticationFailed("Invalid email or password")
@@ -105,6 +128,17 @@ class LoginView(APIView):
         except AuthenticationFailed as e:
             return Response({"error": str(e)}, status=status.HTTP_401_UNAUTHORIZED)
         except Exception as e:
+            import sys
+            import traceback
+            
+            error_info = {
+                "error": "Login failed",
+                "details": str(e),
+                "traceback": traceback.format_exc()
+            }
+            
+            print("Login error:", error_info, file=sys.stderr)
+            
             return Response({"error": "Login failed", "details": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 @method_decorator(csrf_exempt, name='dispatch')
