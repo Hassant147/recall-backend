@@ -7,13 +7,20 @@ services:
       dockerfile: Dockerfile.dev
     volumes:
       - ./:/app
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media
     environment:
       - DEBUG=True
+      - DJANGO_SETTINGS_MODULE=Search.settings
+      - PYTHONPATH=/app
     ports:
       - "8000:8000"
+      - "5678:5678"  # For debugging
     command: >
       sh -c "python manage.py migrate &&
              python manage.py runserver 0.0.0.0:8000"
+    # Uncomment to enable debugging
+    # command: python -m debugpy --listen 0.0.0.0:5678 manage.py runserver 0.0.0.0:8000 --nothreading --noreload
 
   db:
     ports:
@@ -26,4 +33,6 @@ services:
       - "6379:6379"
 
 volumes:
-  postgres_data_dev: 
+  postgres_data_dev:
+  static_volume:
+  media_volume: 
