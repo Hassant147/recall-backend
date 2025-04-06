@@ -220,9 +220,6 @@ EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 
-# Session settings
-SESSION_COOKIE_AGE = 7200  # 2 hours in seconds
-
 # Fix for SSL certificate verification issues in development
 if os.getenv('PYTHON_SSL_CERT_VERIFY', 'True').lower() == 'false':
     import ssl
@@ -241,4 +238,7 @@ MEDIA_URL = '/media/'
 
 STATIC_ROOT = os.path.join(BASE_DIR, 'static')
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+# Session settings
+SESSION_COOKIE_AGE = 7200  # 2 hours in seconds
 
