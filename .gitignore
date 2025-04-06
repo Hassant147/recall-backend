@@ -2,14 +2,15 @@
 *.py[cod]
 __pycache__/
 *.so
-# Django migrations
-*/migrations/
 
-# .env file
+# Django migrations - DON'T IGNORE MIGRATIONS IN PRODUCTION CODE
+# */migrations/
+
+# Environment configuration
 .env
+.env.local
+.env.development
 
-# Django settings (if you want to ignore settings.py)
-settings.py
 # Virtual environments
 .env
 .venv

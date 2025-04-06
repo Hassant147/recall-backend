@@ -47,21 +47,34 @@ INSTALLED_APPS = [
     "corsheaders",
 ]
 
-# Make sure we're not using unix socket for PostgreSQL
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.getenv("POSTGRES_DB"),
-        "USER": os.getenv("POSTGRES_USER"),
-        "PASSWORD": os.getenv("POSTGRES_PASSWORD"),
-        "HOST": os.getenv("POSTGRES_HOST", ""),
-        "PORT": os.getenv("POSTGRES_PORT", "5432"),
-        "OPTIONS": {
-            "sslmode": "require",
-            "connect_timeout": 10,
+# Database settings
+# Use environment variable or explicit setting to determine if we're in production
+IS_PRODUCTION = os.getenv('DJANGO_SETTINGS_MODULE', '') == 'Search.settings_prod' or os.getenv('IS_PRODUCTION', 'False').lower() == 'true'
+
+if not IS_PRODUCTION and os.getenv('DEBUG', 'False').lower() == 'true':
+    # Use SQLite for local development
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
         }
     }
-}
+else:
+    # Use PostgreSQL for production
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.getenv("POSTGRES_DB"),
+            "USER": os.getenv("POSTGRES_USER"),
+            "PASSWORD": os.getenv("POSTGRES_PASSWORD"),
+            "HOST": os.getenv("POSTGRES_HOST", ""),
+            "PORT": os.getenv("POSTGRES_PORT", "5432"),
+            "OPTIONS": {
+                "sslmode": "require",
+                "connect_timeout": 10,
+            }
+        }
+    }
 
 REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [

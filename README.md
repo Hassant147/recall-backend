@@ -17,12 +17,14 @@ A Django REST API backend for the Recall search engine application. This backend
 
 - Python 3 with Django 5.1.7
 - Django REST Framework for API endpoints
-- PostgreSQL for database
+- PostgreSQL for database (SQLite option for local development)
 - Redis for caching
 - Stripe for payment processing
 - Docker and Docker Compose for containerization
 
 ## Development Setup
+
+### Option 1: Using Docker (PostgreSQL)
 
 1. Clone the repository:
 ```bash
@@ -42,12 +44,45 @@ cp .env.example .env
 docker-compose up
 ```
 
-5. To run without Docker, install dependencies and run the server:
+### Option 2: Local Development with SQLite
+
+For quick local development without needing to set up PostgreSQL:
+
+1. Clone the repository:
+```bash
+git clone https://github.com/Hassant147/recall-backend.git
+cd recall-backend
+```
+
+2. Create a virtual environment and activate it:
+```bash
+python3 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+```
+
+3. Install dependencies:
 ```bash
 pip install -r requirements.txt
+```
+
+4. Create a local environment file:
+```bash
+cp .env.example .env.local
+```
+
+5. Edit `.env.local` and set:
+```
+DEBUG=True
+IS_PRODUCTION=False
+```
+
+6. Run migrations and start the server:
+```bash
 python manage.py migrate
 python manage.py runserver
 ```
+
+The system will automatically use SQLite for local development when `DEBUG=True` and `IS_PRODUCTION=False`.
 
 ## API Documentation
 
