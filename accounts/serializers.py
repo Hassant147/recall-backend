@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import IndividualUser, Company, Employee, Query, CustomUser
+from .models import IndividualUser, Company, Employee, Query, CustomUser, StudentUser
 
 
 class EmailOnlySerializer(serializers.Serializer):
@@ -21,6 +21,19 @@ class IndividualSignupDataSerializer(serializers.Serializer):
     last_name = serializers.CharField()
     phone_number = serializers.CharField()
     date_of_birth = serializers.DateField()
+    terms_and_conditions = serializers.BooleanField()
+
+
+class StudentSignupDataSerializer(serializers.Serializer):
+    """Serializer for student user registration data"""
+    email = serializers.EmailField()
+    password = serializers.CharField(write_only=True)
+    first_name = serializers.CharField()
+    last_name = serializers.CharField()
+    phone_number = serializers.CharField()
+    date_of_birth = serializers.DateField()
+    student_id = serializers.CharField()
+    student_organisation_name = serializers.CharField()
     terms_and_conditions = serializers.BooleanField()
 
 
@@ -62,7 +75,7 @@ class LoginSerializer(serializers.Serializer):
 class CustomUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = CustomUser
-        fields = ('email', 'is_company', 'is_active')
+        fields = ('email', 'is_company', 'is_student', 'is_active')
 
 class IndividualUserSerializer(serializers.ModelSerializer):
     user = CustomUserSerializer()
@@ -70,6 +83,14 @@ class IndividualUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = IndividualUser
         fields = ('user', 'first_name', 'last_name', 'phone_number', 'date_of_birth', 'date_joined')
+
+class StudentUserSerializer(serializers.ModelSerializer):
+    user = CustomUserSerializer()
+    
+    class Meta:
+        model = StudentUser
+        fields = ('user', 'first_name', 'last_name', 'phone_number', 'date_of_birth', 
+                 'student_id', 'student_organisation_name', 'date_joined')
 
 class CompanySerializer(serializers.ModelSerializer):
     user = CustomUserSerializer()

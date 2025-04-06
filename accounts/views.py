@@ -29,14 +29,15 @@ from django.contrib.sessions.backends.db import SessionStore
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 
-from .models import IndividualUser, Company, Employee, Query, CustomUser, SubscriptionPlan, Subscription, Transaction, UserSearchCount
+from .models import IndividualUser, Company, Employee, Query, CustomUser, SubscriptionPlan, Subscription, Transaction, UserSearchCount, StudentUser
 from .serializers import (
     EmailOnlySerializer, 
     VerifyOTPSerializer,
     IndividualSignupDataSerializer,
+    StudentSignupDataSerializer,
     CompanySignupDataSerializer,
     AddEmployeeSerializer, LoginSerializer,
-    CustomUserSerializer, IndividualUserSerializer, CompanySerializer, EmployeeSerializer,
+    CustomUserSerializer, IndividualUserSerializer, CompanySerializer, EmployeeSerializer, StudentUserSerializer,
     ForgotPasswordSerializer, ResetPasswordSerializer, ChangePasswordSerializer,
     EmployeeInviteSerializer, CompleteEmployeeRegistrationSerializer, EmployeeListSerializer
 )
@@ -161,9 +162,9 @@ class LoginView(APIView):
                 user_data["profile"] = CompanySerializer(company).data
             else:
                 try:
-                    individual = IndividualUser.objects.get(user=user)
-                    user_data["profile"] = IndividualUserSerializer(individual).data
-                except IndividualUser.DoesNotExist:
+                    student = StudentUser.objects.get(user=user)
+                    user_data["profile"] = StudentUserSerializer(student).data
+                except StudentUser.DoesNotExist:
                     try:
                         employee = Employee.objects.get(user=user)
                         user_data["profile"] = EmployeeSerializer(employee).data
@@ -2015,4 +2016,177 @@ class CheckExportPermissionView(APIView):
                 "message": "Your current plan does not allow exporting summaries. Please upgrade to a paid plan.",
                 "upgrade_required": True
             }, status=status.HTTP_200_OK)
+
+# ---- Student Signup (OTP Sending) ----
+
+class StudentSignupView(APIView):
+    """
+    Student user signup: Sends OTP to email.
+    """
+    @swagger_auto_schema(
+        operation_description="Student signup step 1: Send OTP to email",
+        request_body=EmailOnlySerializer,
+        responses={
+            200: openapi.Response("OTP sent successfully to email"),
+            400: "Email already registered or invalid",
+            500: "Server error"
+        }
+    )
+    def post(self, request):
+        try:
+            serializer = EmailOnlySerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response({"error": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+            email = serializer.validated_data["email"]
+
+            # Check if a StudentUser already exists for this email
+            if CustomUser.objects.filter(email=email).exists():
+                return Response({"error": "Email already registered"}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Generate 6-digit OTP
+            otp = "".join([str(random.randint(0, 9)) for _ in range(6)])
+
+            # Store OTP in session
+            request.session['signup_otp'] = otp
+            request.session['signup_email'] = email
+            request.session['signup_type'] = 'student'
+            request.session['otp_created_at'] = datetime.now().timestamp()
+
+            # Send OTP to email
+            send_mail(
+                subject="Your Student Registration OTP",
+                message=f"Your OTP code for student registration is {otp}",
+                from_email=settings.EMAIL_HOST_USER,
+                recipient_list=[email],
+                fail_silently=False,
+            )
+
+            return Response({"message": "OTP sent successfully"}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": "Failed to send OTP", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ---- Verify OTP for Student User ----
+
+class VerifyStudentOTPView(APIView):
+    """
+    Verify OTP for student user registration.
+    """
+    @swagger_auto_schema(
+        operation_description="Student signup step 2: Verify OTP",
+        request_body=VerifyOTPSerializer,
+        responses={
+            200: openapi.Response("OTP verified successfully"),
+            400: "Invalid OTP or email mismatch",
+            500: "Server error"
+        }
+    )
+    def post(self, request):
+        try:
+            serializer = VerifyOTPSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response({"errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+            email = serializer.validated_data["email"]
+            otp = serializer.validated_data["otp"]
+
+            # Verify session data
+            if not request.session.get('signup_otp') or not request.session.get('signup_email'):
+                return Response({"error": "No OTP session found. Please request a new OTP"}, status=status.HTTP_400_BAD_REQUEST)
+
+            if email != request.session.get('signup_email'):
+                return Response({"error": "Email mismatch"}, status=status.HTTP_400_BAD_REQUEST)
+
+            if request.session.get('signup_type') != 'student':
+                return Response({"error": "Invalid registration type"}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Check OTP expiration (10 minutes)
+            otp_created_at = request.session.get('otp_created_at')
+            if not otp_created_at or (datetime.now().timestamp() - otp_created_at) > 600:
+                return Response({"error": "OTP expired. Please request a new one"}, status=status.HTTP_400_BAD_REQUEST)
+
+            if otp != request.session.get('signup_otp'):
+                return Response({"error": "Invalid OTP"}, status=status.HTTP_400_BAD_REQUEST)
+
+            # OTP verified, set verification flag in session
+            request.session['otp_verified'] = True
+
+            return Response({"message": "OTP verified successfully"}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": "OTP verification failed", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ---- Complete Registration for Student User ----
+
+class CompleteStudentRegistrationView(APIView):
+    """
+    Complete registration for student users after OTP verification.
+    """
+    @swagger_auto_schema(
+        operation_description="Student signup step 3: Complete registration with student details",
+        request_body=StudentSignupDataSerializer,
+        responses={
+            201: openapi.Response("Student registration successful with user data"),
+            400: "OTP not verified, email mismatch, or invalid input",
+            500: "Server error"
+        }
+    )
+    def post(self, request):
+        try:
+            serializer = StudentSignupDataSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response({"errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Check if OTP verification was completed
+            if not request.session.get('otp_verified'):
+                return Response({"error": "OTP verification required"}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Check email matches the verification email
+            email = serializer.validated_data["email"]
+            if email != request.session.get('signup_email'):
+                return Response({"error": "Email mismatch with verified email"}, status=status.HTTP_400_BAD_REQUEST)
+
+            if request.session.get('signup_type') != 'student':
+                return Response({"error": "Invalid registration type"}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Create CustomUser
+            user = CustomUser.objects.create_user(
+                email=email,
+                password=serializer.validated_data["password"],
+                is_company=False,
+                is_student=True,
+            )
+
+            # Create StudentUser record
+            student = StudentUser.objects.create(
+                user=user,
+                first_name=serializer.validated_data["first_name"],
+                last_name=serializer.validated_data["last_name"],
+                phone_number=serializer.validated_data["phone_number"],
+                date_of_birth=serializer.validated_data["date_of_birth"],
+                student_id=serializer.validated_data["student_id"],
+                student_organisation_name=serializer.validated_data["student_organisation_name"],
+                terms_and_conditions=serializer.validated_data["terms_and_conditions"],
+            )
+
+            # Clear session data
+            for key in ['signup_otp', 'signup_email', 'otp_created_at', 'otp_verified', 'signup_type']:
+                if key in request.session:
+                    del request.session[key]
+
+            # Log the user in
+            login(request, user)
+
+            # Return student data
+            user_data = {
+                "user": CustomUserSerializer(user).data,
+                "profile": StudentUserSerializer(student).data
+            }
+
+            user_data["session_id"] = request.session.session_key
+            
+            return Response(user_data, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response({"error": "Student registration failed", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 

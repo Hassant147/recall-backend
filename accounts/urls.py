@@ -1,6 +1,7 @@
 from django.urls import path
 from .views import (
     IndividualSignupView, VerifyIndividualOTPView, CompleteIndividualRegistrationView,
+    StudentSignupView, VerifyStudentOTPView, CompleteStudentRegistrationView,
     CompanySignupView, VerifyCompanyOTPView, CompleteCompanyRegistrationView,
     InviteEmployeeView, CompleteEmployeeRegistrationView,
     CompanyEmployeesView, CompanyEmployeeDetailView,
@@ -14,20 +15,25 @@ from .views import (
 from .stripe_webhooks import stripe_webhook
 
 urlpatterns = [
+    # Authentication
+    path("login/", LoginView.as_view(), name="login"),
+    path("logout/", LogoutView.as_view(), name="logout"),
+
     # Individual Users
     path("individual/signup/", IndividualSignupView.as_view(), name="individual_signup"),
     path("individual/verify-otp/", VerifyIndividualOTPView.as_view(), name="verify_individual_otp"),
     path("individual/complete-registration/", CompleteIndividualRegistrationView.as_view(), name="complete_individual_registration"),
+
+    # Student Users
+    path("student/signup/", StudentSignupView.as_view(), name="student_signup"),
+    path("student/verify-otp/", VerifyStudentOTPView.as_view(), name="verify_student_otp"),
+    path("student/complete-registration/", CompleteStudentRegistrationView.as_view(), name="complete_student_registration"),
 
     # Companies
     path("company/signup/", CompanySignupView.as_view(), name="company_signup"),
     path("company/verify-otp/", VerifyCompanyOTPView.as_view(), name="verify_company_otp"),
     path("company/complete-registration/", CompleteCompanyRegistrationView.as_view(), name="complete_company_registration"),
     
-    # Login/Logout
-    path("login/", LoginView.as_view(), name="login"),
-    path("logout/", LogoutView.as_view(), name="logout"),
-
     # Session Management
     path("refresh-session/", RefreshSessionView.as_view(), name="refresh_session"),
     path("session/status/", SessionStatusView.as_view(), name="session_status"),

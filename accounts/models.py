@@ -32,6 +32,7 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
     is_company = models.BooleanField(default=False)
+    is_student = models.BooleanField(default=False)
 
     objects = CustomUserManager()
 
@@ -48,6 +49,21 @@ class IndividualUser(models.Model):
     last_name = models.CharField(max_length=100)
     phone_number = models.CharField(max_length=15)
     date_of_birth = models.DateField()
+    terms_and_conditions = models.BooleanField(default=False)
+    date_joined = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.user.email
+
+
+class StudentUser(models.Model):
+    user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, primary_key=True)
+    first_name = models.CharField(max_length=100)
+    last_name = models.CharField(max_length=100)
+    phone_number = models.CharField(max_length=15)
+    date_of_birth = models.DateField()
+    student_id = models.CharField(max_length=100)
+    student_organisation_name = models.CharField(max_length=255)
     terms_and_conditions = models.BooleanField(default=False)
     date_joined = models.DateTimeField(auto_now_add=True)
 
