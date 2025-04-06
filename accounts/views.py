@@ -2175,6 +2175,7 @@ class CompleteStudentRegistrationView(APIView):
                 student_id=serializer.validated_data["student_id"],
                 student_organisation_name=serializer.validated_data["student_organisation_name"],
                 terms_and_conditions=serializer.validated_data["terms_and_conditions"],
+                is_approved=False,  # Default to not approved
             )
 
             # Clean up Redis
@@ -2186,7 +2187,11 @@ class CompleteStudentRegistrationView(APIView):
             # Return student data
             user_data = {
                 "user": CustomUserSerializer(user).data,
-                "profile": StudentUserSerializer(student).data
+                "profile": StudentUserSerializer(student).data,
+                "approval_status": {
+                    "is_approved": False,
+                    "message": "Your account is pending admin approval. You will be notified once approved."
+                }
             }
 
             user_data["session_id"] = request.session.session_key

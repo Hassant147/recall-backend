@@ -38,14 +38,26 @@ class IndividualUserAdmin(admin.ModelAdmin):
     user_email.admin_order_field = 'user__email'
 
 class StudentUserAdmin(admin.ModelAdmin):
-    list_display = ('user_email', 'first_name', 'last_name', 'student_id', 'student_organisation_name', 'date_joined')
+    list_display = ('user_email', 'first_name', 'last_name', 'student_id', 'student_organisation_name', 'date_joined', 'is_approved')
+    list_filter = ('is_approved',)
     search_fields = ('user__email', 'first_name', 'last_name', 'student_id', 'student_organisation_name')
     date_hierarchy = 'date_joined'
+    actions = ['approve_students', 'disapprove_students']
     
     def user_email(self, obj):
         return obj.user.email
     user_email.short_description = 'Email'
     user_email.admin_order_field = 'user__email'
+    
+    def approve_students(self, request, queryset):
+        updated = queryset.update(is_approved=True)
+        self.message_user(request, f'{updated} student(s) have been approved.')
+    approve_students.short_description = "Approve selected students"
+    
+    def disapprove_students(self, request, queryset):
+        updated = queryset.update(is_approved=False)
+        self.message_user(request, f'{updated} student(s) have been disapproved.')
+    disapprove_students.short_description = "Disapprove selected students"
 
 class CompanyAdmin(admin.ModelAdmin):
     list_display = ('user_email', 'name', 'website', 'phone_number', 'employee_count')

@@ -66,6 +66,7 @@ class StudentUser(models.Model):
     student_organisation_name = models.CharField(max_length=255)
     terms_and_conditions = models.BooleanField(default=False)
     date_joined = models.DateTimeField(auto_now_add=True)
+    is_approved = models.BooleanField(default=False)
 
     def __str__(self):
         return self.user.email

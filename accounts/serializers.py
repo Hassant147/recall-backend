@@ -96,7 +96,7 @@ class StudentUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = StudentUser
         fields = ('user', 'first_name', 'last_name', 'phone_number', 'date_of_birth', 
-                 'student_id', 'student_organisation_name', 'date_joined')
+                 'student_id', 'student_organisation_name', 'date_joined', 'is_approved')
 
 class CompanySerializer(serializers.ModelSerializer):
     user = CustomUserSerializer()
