@@ -11,7 +11,7 @@ from .views import (
     SubscriptionPlansView, BillingHistoryView, ActivateSubscriptionView,
     RefreshSessionView, SessionStatusView, CancelSubscriptionView,
     CheckUserFeaturesView, CheckExportPermissionView,
-    SendOTPView, VerifyOTPView
+    SendOTPView, VerifyOTPView, StudentApprovalStatusView
 )
 from .stripe_webhooks import stripe_webhook
 
@@ -33,6 +33,7 @@ urlpatterns = [
     path("student/signup/", StudentSignupView.as_view(), name="student_signup"),
     path("student/verify-otp/", VerifyStudentOTPView.as_view(), name="verify_student_otp"),
     path("student/complete-registration/", CompleteStudentRegistrationView.as_view(), name="complete_student_registration"),
+    path("student/approval-status/", StudentApprovalStatusView.as_view(), name="student_approval_status"),
 
     # Companies
     path("company/signup/", CompanySignupView.as_view(), name="company_signup"),

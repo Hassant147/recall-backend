@@ -2325,3 +2325,61 @@ class VerifyOTPView(APIView):
         except Exception as e:
             return Response({"error": "OTP verification failed", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+# ---- Student Approval Status ----
+@method_decorator(csrf_exempt, name='dispatch')
+class StudentApprovalStatusView(APIView):
+    """
+    View to check if a student account has been approved by an admin.
+    """
+    authentication_classes = [CsrfExemptSessionAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+    
+    @swagger_auto_schema(
+        operation_description="Check if student account has been approved by admin",
+        responses={
+            200: openapi.Response("Student approval status", schema=openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    'is_approved': openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                    'message': openapi.Schema(type=openapi.TYPE_STRING),
+                },
+            )),
+            403: "Not a student account",
+            404: "Student profile not found"
+        }
+    )
+    def get(self, request):
+        try:
+            # Check if the user is a student
+            if not request.user.is_student:
+                return Response(
+                    {"error": "This endpoint is only for student accounts"}, 
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            
+            # Get the student profile
+            try:
+                student = StudentUser.objects.get(user=request.user)
+            except StudentUser.DoesNotExist:
+                return Response(
+                    {"error": "Student profile not found"}, 
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Return approval status
+            if student.is_approved:
+                message = "Your account has been approved"
+            else:
+                message = "Your account is pending approval from an administrator"
+                
+            return Response({
+                "is_approved": student.is_approved,
+                "message": message
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response(
+                {"error": str(e)}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
