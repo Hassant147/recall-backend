@@ -2025,6 +2025,9 @@ class StudentSignupView(APIView):
     """
     Student user signup: Sends OTP to email.
     """
+    authentication_classes = [CsrfExemptSessionAuthentication]
+    permission_classes = [permissions.AllowAny]
+    
     @swagger_auto_schema(
         operation_description="Student signup step 1: Send OTP to email",
         request_body=EmailOnlySerializer,
@@ -2075,6 +2078,9 @@ class VerifyStudentOTPView(APIView):
     """
     Verify OTP for student user registration.
     """
+    authentication_classes = [CsrfExemptSessionAuthentication]
+    permission_classes = [permissions.AllowAny]
+    
     @swagger_auto_schema(
         operation_description="Student signup step 2: Verify OTP",
         request_body=VerifyOTPSerializer,
@@ -2125,6 +2131,9 @@ class CompleteStudentRegistrationView(APIView):
     """
     Complete registration for student users after OTP verification.
     """
+    authentication_classes = [CsrfExemptSessionAuthentication]
+    permission_classes = [permissions.AllowAny]
+    
     @swagger_auto_schema(
         operation_description="Student signup step 3: Complete registration with student details",
         request_body=StudentSignupDataSerializer,
@@ -2306,6 +2315,9 @@ class VerifyOTPView(APIView):
 
             # Optionally, delete the OTP data from Redis upon successful verification
             redis_client.delete(f"signup_otp:{email}")
+
+            # Set verification flag in Redis (valid for 30 minutes)
+            redis_client.setex(f"verified:{email}", 1800, "true")
 
             return Response({
                 "message": "OTP verified successfully", 
