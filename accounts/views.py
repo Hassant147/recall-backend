@@ -39,7 +39,8 @@ from .serializers import (
     AddEmployeeSerializer, LoginSerializer,
     CustomUserSerializer, IndividualUserSerializer, CompanySerializer, EmployeeSerializer, StudentUserSerializer,
     ForgotPasswordSerializer, ResetPasswordSerializer, ChangePasswordSerializer,
-    EmployeeInviteSerializer, CompleteEmployeeRegistrationSerializer, EmployeeListSerializer
+    EmployeeInviteSerializer, CompleteEmployeeRegistrationSerializer, EmployeeListSerializer,
+    SendOTPSerializer
 )
 
 load_dotenv()
@@ -2189,4 +2190,121 @@ class CompleteStudentRegistrationView(APIView):
             return Response(user_data, status=status.HTTP_201_CREATED)
         except Exception as e:
             return Response({"error": "Student registration failed", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+# ---- Consolidated User Signup (OTP Sending) ----
+
+class SendOTPView(APIView):
+    """
+    Consolidated endpoint for sending OTP for any user type (individual, company, student).
+    """
+    @swagger_auto_schema(
+        operation_description="Send OTP to email for any user type",
+        request_body=SendOTPSerializer,
+        responses={
+            200: openapi.Response("OTP sent successfully to email"),
+            400: "Email already registered, invalid user type, or invalid input",
+            500: "Server error"
+        }
+    )
+    def post(self, request):
+        try:
+            serializer = SendOTPSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response({"error": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+            email = serializer.validated_data["email"]
+            user_type = serializer.validated_data["user_type"]
+
+            # Check if user already exists
+            if CustomUser.objects.filter(email=email).exists():
+                return Response({"error": "Email already registered"}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Generate 6-digit OTP
+            otp = "".join([str(random.randint(0, 9)) for _ in range(6)])
+
+            # Store OTP in session
+            request.session['signup_otp'] = otp
+            request.session['signup_email'] = email
+            request.session['signup_type'] = user_type
+            request.session['otp_created_at'] = datetime.now().timestamp()
+
+            # Set appropriate subject based on user_type
+            if user_type == 'individual':
+                subject = "Your Individual Registration OTP"
+                message = f"Your OTP code for individual registration is {otp}"
+            elif user_type == 'company':
+                subject = "Your Company Registration OTP"
+                message = f"Your OTP code for company registration is {otp}"
+            else:  # student
+                subject = "Your Student Registration OTP"
+                message = f"Your OTP code for student registration is {otp}"
+
+            # Send OTP to email
+            send_mail(
+                subject=subject,
+                message=message,
+                from_email=settings.EMAIL_HOST_USER,
+                recipient_list=[email],
+                fail_silently=False,
+            )
+
+            return Response({"message": "OTP sent successfully"}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": "Failed to send OTP", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ---- Verify OTP (Consolidated) ----
+
+class VerifyOTPView(APIView):
+    """
+    Consolidated endpoint to verify OTP for any user type.
+    """
+    @swagger_auto_schema(
+        operation_description="Verify OTP for any user type",
+        request_body=VerifyOTPSerializer,
+        responses={
+            200: openapi.Response("OTP verified successfully"),
+            400: "Invalid OTP, email mismatch, or session expired",
+            500: "Server error"
+        }
+    )
+    def post(self, request):
+        try:
+            serializer = VerifyOTPSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response({"error": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+            email = serializer.validated_data["email"]
+            otp = serializer.validated_data["otp"]
+
+            # Verify session data
+            if not request.session.get('signup_otp') or not request.session.get('signup_email'):
+                return Response({"error": "No OTP session found. Please request a new OTP"}, status=status.HTTP_400_BAD_REQUEST)
+
+            if email != request.session.get('signup_email'):
+                return Response({"error": "Email mismatch"}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Get the user type from session
+            user_type = request.session.get('signup_type')
+            if not user_type or user_type not in ['individual', 'company', 'student']:
+                return Response({"error": "Invalid registration type"}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Check OTP expiration (10 minutes)
+            otp_created_at = request.session.get('otp_created_at')
+            if not otp_created_at or (datetime.now().timestamp() - otp_created_at) > 600:
+                return Response({"error": "OTP expired. Please request a new one"}, status=status.HTTP_400_BAD_REQUEST)
+
+            if otp != request.session.get('signup_otp'):
+                return Response({"error": "Invalid OTP"}, status=status.HTTP_400_BAD_REQUEST)
+
+            # OTP verified, set verification flag in session
+            request.session['otp_verified'] = True
+
+            # Return the user type in the response so frontend knows which registration to complete
+            return Response({
+                "message": "OTP verified successfully", 
+                "user_type": user_type
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": "OTP verification failed", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 

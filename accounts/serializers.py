@@ -7,6 +7,12 @@ class EmailOnlySerializer(serializers.Serializer):
     email = serializers.EmailField()
 
 
+class SendOTPSerializer(serializers.Serializer):
+    """Serializer for sending OTP to any user type"""
+    email = serializers.EmailField()
+    user_type = serializers.ChoiceField(choices=['individual', 'company', 'student'])
+
+
 class VerifyOTPSerializer(serializers.Serializer):
     """Serializer for OTP verification only"""
     email = serializers.EmailField()

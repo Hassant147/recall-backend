@@ -10,7 +10,8 @@ from .views import (
     ForgotPasswordView, ResetPasswordView, ChangePasswordView,
     SubscriptionPlansView, BillingHistoryView, ActivateSubscriptionView,
     RefreshSessionView, SessionStatusView, CancelSubscriptionView,
-    CheckUserFeaturesView, CheckExportPermissionView
+    CheckUserFeaturesView, CheckExportPermissionView,
+    SendOTPView, VerifyOTPView
 )
 from .stripe_webhooks import stripe_webhook
 
@@ -18,6 +19,10 @@ urlpatterns = [
     # Authentication
     path("login/", LoginView.as_view(), name="login"),
     path("logout/", LogoutView.as_view(), name="logout"),
+
+    # Consolidated OTP endpoints (new)
+    path("signup/send-otp/", SendOTPView.as_view(), name="send_otp"),
+    path("signup/verify-otp/", VerifyOTPView.as_view(), name="verify_otp"),
 
     # Individual Users
     path("individual/signup/", IndividualSignupView.as_view(), name="individual_signup"),
