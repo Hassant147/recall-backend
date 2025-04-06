@@ -1441,13 +1441,16 @@ class SubscriptionPlansView(APIView):
                                     "id": openapi.Schema(type=openapi.TYPE_STRING),
                                     "name": openapi.Schema(type=openapi.TYPE_STRING),
                                     "price": openapi.Schema(type=openapi.TYPE_NUMBER),
+                                    "currency": openapi.Schema(type=openapi.TYPE_STRING, 
+                                                             default="GBP",
+                                                             description="Currency code (GBP for British Pounds)"),
                                     "features": openapi.Schema(
                                         type=openapi.TYPE_ARRAY,
                                         items=openapi.Items(type=openapi.TYPE_STRING)
                                     ),
                                     "validity": openapi.Schema(type=openapi.TYPE_INTEGER),
                                     "is_popular": openapi.Schema(type=openapi.TYPE_BOOLEAN),
-                                    "stripe_price_id": openapi.Schema(type=openapi.TYPE_STRING, nullable=True)
+                                    "stripe_price_id": openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
                                 }
                             )
                         )
@@ -1464,17 +1467,18 @@ class SubscriptionPlansView(APIView):
             # Format plans for response
             formatted_plans = []
             for plan in plans:
-                # Get features for the plan (this assumes you have features stored somewhere)
+                # Get features for the plan
                 features = self.get_plan_features(plan)
                 
                 formatted_plans.append({
                     "id": str(plan.plan_id),
                     "name": plan.name,
-                    "price": plan.price / 100,  # Convert from cents to dollars
+                    "price": plan.price / 100,  # Convert from pence to pounds (GBP)
+                    "currency": "GBP",  # Explicitly set currency to British Pounds
                     "features": features,
                     "validity": plan.validity,
                     "is_popular": getattr(plan, 'is_popular', False),
-                    "stripe_price_id": getattr(plan, 'stripe_price_id', None)
+                    "stripe_price_id": getattr(plan, 'stripe_price_id', None),
                 })
             
             # If no plans in database, return sample plans
@@ -1484,37 +1488,41 @@ class SubscriptionPlansView(APIView):
                         "id": "free",
                         "name": "Free",
                         "price": 0,
+                        "currency": "GBP",
                         "features": ["Basic search functionality", "Limited to 5 queries per day", "No subscription required"],
                         "validity": 0,  # Unlimited
                         "is_popular": False,
-                        "stripe_price_id": None
+                        "stripe_price_id": None,
                     },
                     {
                         "id": "basic",
                         "name": "Basic",
                         "price": 9.99,
+                        "currency": "GBP",
                         "features": ["Advanced search functionality", "Up to 50 queries per day", "Save search history", "Email support"],
                         "validity": 30,  # 30 days
                         "is_popular": False,
-                        "stripe_price_id": "price_basic123"
+                        "stripe_price_id": "price_basic123",
                     },
                     {
                         "id": "pro",
                         "name": "Professional",
                         "price": 19.99,
+                        "currency": "GBP",
                         "features": ["Premium search functionality", "Unlimited queries", "Detailed analysis", "Priority support", "Export capabilities"],
                         "validity": 30,  # 30 days
                         "is_popular": True,
-                        "stripe_price_id": "price_pro123"
+                        "stripe_price_id": "price_pro123",
                     },
                     {
                         "id": "premium",
                         "name": "Premium",
                         "price": 49.99,
+                        "currency": "GBP",
                         "features": ["Enterprise-grade search", "Unlimited queries", "Advanced analytics", "24/7 support", "Custom integrations"],
                         "validity": 30,  # 30 days
                         "is_popular": False,
-                        "stripe_price_id": "price_premium123"
+                        "stripe_price_id": "price_premium123",
                     }
                 ]
             
@@ -1523,11 +1531,16 @@ class SubscriptionPlansView(APIView):
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     def get_plan_features(self, plan):
-        """Get features for a plan. This is a placeholder - implement based on your data model."""
-        # This is a placeholder implementation. You should modify this
-        # based on how you store features for your plans.
+        """Get features for a plan."""
+        # Features for each plan type
         features_map = {
-            "free": ["Basic search functionality", "Limited to 5 queries per day", "No subscription required"],
+            "free": ["3 free searches"],
+            "daily": ["Unlimited searches"],
+            "monthly": ["Unlimited searches", "Ability to copy summaries and export", "Cancel any time"],
+            "annual": ["Unlimited searches", "Ability to copy summaries and export", "Cancel any time, with partial refund available for any unused months"],
+            "student_monthly": ["Unlimited searches", "Ability to copy summaries and export", "Cancel any time"],
+            "student_annual": ["Unlimited searches", "Ability to copy summaries and export", "Cancel any time, with partial refund available for any unused months"],
+            # Legacy plans - keeping for backward compatibility
             "basic": ["Advanced search functionality", "Up to 50 queries per day", "Save search history", "Email support"],
             "pro": ["Premium search functionality", "Unlimited queries", "Detailed analysis", "Priority support", "Export capabilities"],
             "premium": ["Enterprise-grade search", "Unlimited queries", "Advanced analytics", "24/7 support", "Custom integrations"]
@@ -1661,7 +1674,7 @@ class ActivateSubscriptionView(APIView):
             Transaction.objects.create(
                 user=user,
                 stripe_invoice_id=f"test_invoice_{timezone.now().timestamp()}",
-                amount=plan.price / 100,  # Convert from cents to dollars
+                amount=plan.price / 100,  # Convert from cents to pounds (GBP)
                 status='succeeded',
                 description=f"Test payment for {plan.name}",
                 date=timezone.now()
