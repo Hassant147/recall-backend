@@ -2193,8 +2193,9 @@ class CompleteStudentRegistrationView(APIView):
             return Response({"error": "Student registration failed", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 # ---- Consolidated User Signup (OTP Sending) ----
-
+@method_decorator(csrf_exempt, name='dispatch')
 class SendOTPView(APIView):
+    authentication_classes = [CsrfExemptSessionAuthentication]
     permission_classes = [permissions.AllowAny]
     """
     Consolidated endpoint for sending OTP for any user type (individual, company, student).
@@ -2256,8 +2257,9 @@ class SendOTPView(APIView):
 
 
 # ---- Verify OTP (Consolidated) ----
-
+@method_decorator(csrf_exempt, name='dispatch')
 class VerifyOTPView(APIView):
+    authentication_classes = [CsrfExemptSessionAuthentication]
     permission_classes = [permissions.AllowAny]
     """
     Consolidated endpoint to verify OTP for any user type.
