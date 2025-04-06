@@ -8,7 +8,8 @@ from .views import (
     CheckSubscriptionView, CreateCheckoutSessionView,
     ForgotPasswordView, ResetPasswordView, ChangePasswordView,
     SubscriptionPlansView, BillingHistoryView, ActivateSubscriptionView,
-    RefreshSessionView, SessionStatusView, CancelSubscriptionView
+    RefreshSessionView, SessionStatusView, CancelSubscriptionView,
+    CheckUserFeaturesView, CheckExportPermissionView
 )
 from .stripe_webhooks import stripe_webhook
 
@@ -54,6 +55,10 @@ urlpatterns = [
     path('subscription/create-checkout-session', CreateCheckoutSessionView.as_view(), name="create_checkout_session"),
     path('subscription/activate', ActivateSubscriptionView.as_view(), name="activate_subscription"),
     path('subscription/cancel', CancelSubscriptionView.as_view(), name="cancel_subscription"),
+    
+    # User Features
+    path('user/features/', CheckUserFeaturesView.as_view(), name="check_user_features"),
+    path('queries/<uuid:query_id>/can-export/', CheckExportPermissionView.as_view(), name="check_export_permission"),
     
     # Stripe Webhook
     path('webhook/stripe/', stripe_webhook, name="stripe_webhook"),

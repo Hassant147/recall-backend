@@ -29,7 +29,7 @@ from django.contrib.sessions.backends.db import SessionStore
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 
-from .models import IndividualUser, Company, Employee, Query, CustomUser, SubscriptionPlan, Subscription, Transaction
+from .models import IndividualUser, Company, Employee, Query, CustomUser, SubscriptionPlan, Subscription, Transaction, UserSearchCount
 from .serializers import (
     EmailOnlySerializer, 
     VerifyOTPSerializer,
@@ -633,7 +633,8 @@ class SaveQueryView(APIView):
         ),
         responses={
             201: openapi.Response("Query saved"),
-            400: "Invalid input"
+            400: "Invalid input",
+            402: "Payment required"
         }
     )
     def post(self, request):
@@ -652,6 +653,28 @@ class SaveQueryView(APIView):
             return Response({"error": "Query is required."}, status=status.HTTP_400_BAD_REQUEST)
 
         user_instance = CustomUser.objects.get(pk=request.user.pk)
+        
+        # Check user's subscription status and search limits
+        try:
+            subscription = Subscription.objects.get(user=user_instance)
+        except Subscription.DoesNotExist:
+            # Create a free subscription for the user if none exists
+            subscription = Subscription.objects.create(
+                user=user_instance,
+                plan_id='free',
+                status='active'
+            )
+        
+        # Check if user can perform search
+        can_search, error_message = subscription.can_perform_search()
+        if not can_search:
+            return Response(
+                {"error": error_message, "upgrade_required": True}, 
+                status=status.HTTP_402_PAYMENT_REQUIRED
+            )
+        
+        # Increment search count for the user
+        UserSearchCount.increment_search_count(user_instance)
 
         # Print debug information
         print(f"Saving query with summary: {summary[:100]}...")
@@ -847,7 +870,8 @@ class CheckSubscriptionView(APIView):
                                 "plan_id": openapi.Schema(type=openapi.TYPE_STRING),
                                 "plan_name": openapi.Schema(type=openapi.TYPE_STRING),
                                 "current_period_end": openapi.Schema(type=openapi.TYPE_STRING, format="date-time"),
-                                "status": openapi.Schema(type=openapi.TYPE_STRING)
+                                "status": openapi.Schema(type=openapi.TYPE_STRING),
+                                "customer_portal_url": openapi.Schema(type=openapi.TYPE_STRING, nullable=True)
                             }
                         )
                     }
@@ -871,7 +895,8 @@ class CheckSubscriptionView(APIView):
                     "plan_id": subscription.plan_id,
                     "plan_name": self.get_plan_name(subscription.plan_id),
                     "status": subscription.status,
-                    "current_period_end": subscription.current_period_end.isoformat() if subscription.current_period_end else None
+                    "current_period_end": subscription.current_period_end.isoformat() if subscription.current_period_end else None,
+                    "customer_portal_url": self.get_customer_portal_url(subscription.stripe_customer_id) if subscription.stripe_customer_id else None
                 }
             except Subscription.DoesNotExist:
                 # No subscription found, return default data
@@ -880,7 +905,8 @@ class CheckSubscriptionView(APIView):
                     "plan_id": "free",
                     "plan_name": "Free Plan",
                     "status": "inactive",
-                    "current_period_end": None
+                    "current_period_end": None,
+                    "customer_portal_url": None
                 }
             
             return Response({"subscription": subscription_data}, status=status.HTTP_200_OK)
@@ -919,6 +945,22 @@ class CheckSubscriptionView(APIView):
                 
             # Return a formatted version of the ID as last resort
             return plan_id.replace('_', ' ').title()
+    
+    def get_customer_portal_url(self, stripe_customer_id):
+        """Create a customer portal session for managing subscription"""
+        try:
+            if not stripe_customer_id:
+                return None
+                
+            # Create portal session
+            session = stripe.billing_portal.Session.create(
+                customer=stripe_customer_id,
+                return_url=f"{settings.FRONTEND_URL}/dashboard",
+            )
+            return session.url
+        except Exception as e:
+            print(f"Error creating customer portal: {e}")
+            return None
 
 # ---- Forgot Password (Send OTP) ----
 @method_decorator(csrf_exempt, name='dispatch')
@@ -1822,4 +1864,142 @@ class CancelSubscriptionView(APIView):
                 {"error": f"An error occurred: {str(e)}"}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+@method_decorator(csrf_exempt, name='dispatch')
+class CheckUserFeaturesView(APIView):
+    """
+    Check what features a user has access to based on their subscription plan.
+    """
+    authentication_classes = [CsrfExemptSessionAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="Checks what features the current user has access to",
+        responses={
+            200: openapi.Response(
+                description="Features the user has access to",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        "can_search": openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                        "can_export": openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                        "search_limit": openapi.Schema(type=openapi.TYPE_INTEGER),
+                        "searches_remaining": openapi.Schema(type=openapi.TYPE_INTEGER),
+                        "plan": openapi.Schema(type=openapi.TYPE_STRING),
+                        "message": openapi.Schema(type=openapi.TYPE_STRING, nullable=True)
+                    }
+                )
+            )
+        }
+    )
+    def get(self, request):
+        user = request.user
+        
+        try:
+            subscription = Subscription.objects.get(user=user)
+        except Subscription.DoesNotExist:
+            # Create a free subscription for the user if none exists
+            subscription = Subscription.objects.create(
+                user=user,
+                plan_id='free',
+                status='active'
+            )
+        
+        # Get search count for the day
+        current_search_count = UserSearchCount.get_search_count(user)
+        
+        # Determine search limit based on plan
+        search_limit = 3 if subscription.plan_id == 'free' else float('inf')  # unlimited for paid plans
+        searches_remaining = max(0, search_limit - current_search_count) if search_limit != float('inf') else -1  # -1 indicates unlimited
+        
+        # Check if user can perform search and export summaries
+        can_search, error_message = subscription.can_perform_search()
+        can_export = subscription.can_export_summaries()
+        
+        return Response({
+            "can_search": can_search,
+            "can_export": can_export,
+            "search_limit": 3 if search_limit != float('inf') else -1,  # -1 indicates unlimited
+            "searches_remaining": searches_remaining,
+            "plan": subscription.plan_id,
+            "message": error_message
+        }, status=status.HTTP_200_OK)
+
+@method_decorator(csrf_exempt, name='dispatch')
+class CheckExportPermissionView(APIView):
+    """
+    Check if a user has permission to export a summary.
+    """
+    authentication_classes = [CsrfExemptSessionAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="Checks if the user can export/copy a query summary",
+        manual_parameters=[
+            openapi.Parameter(
+                'query_id', 
+                openapi.IN_PATH, 
+                description="ID of the query", 
+                type=openapi.TYPE_STRING, 
+                format=openapi.FORMAT_UUID
+            )
+        ],
+        responses={
+            200: openapi.Response(
+                description="Export permission check result",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        "can_export": openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                        "message": openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
+                        "upgrade_required": openapi.Schema(type=openapi.TYPE_BOOLEAN)
+                    }
+                )
+            ),
+            404: "Query not found"
+        }
+    )
+    def get(self, request, query_id):
+        user = request.user
+        
+        # Check if query exists and belongs to user
+        try:
+            query = Query.objects.get(query_id=query_id)
+            if query.user != user:
+                return Response(
+                    {"error": "You don't have permission to access this query"}, 
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        except Query.DoesNotExist:
+            return Response(
+                {"error": "Query not found"}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Check subscription
+        try:
+            subscription = Subscription.objects.get(user=user)
+        except Subscription.DoesNotExist:
+            # Create a free subscription for the user if none exists
+            subscription = Subscription.objects.create(
+                user=user,
+                plan_id='free',
+                status='active'
+            )
+        
+        # Check if user's plan allows exports
+        can_export = subscription.can_export_summaries()
+        
+        if can_export:
+            return Response({
+                "can_export": True,
+                "message": None,
+                "upgrade_required": False
+            }, status=status.HTTP_200_OK)
+        else:
+            return Response({
+                "can_export": False,
+                "message": "Your current plan does not allow exporting summaries. Please upgrade to a paid plan.",
+                "upgrade_required": True
+            }, status=status.HTTP_200_OK)
 

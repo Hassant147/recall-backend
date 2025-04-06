@@ -1,8 +1,10 @@
 import os
 import uuid
+from datetime import timedelta
 
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.db import models
+from django.utils import timezone
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -131,6 +133,32 @@ class Subscription(models.Model):
     def is_active(self):
         return self.status == 'active'
 
+    def can_perform_search(self):
+        """Check if user can perform a search based on their subscription plan"""
+        # Paid plans can always search
+        if self.status == 'active' and self.plan_id != 'free':
+            return True, None
+
+        # Free plan has limited searches
+        if self.plan_id == 'free':
+            current_count = UserSearchCount.get_search_count(self.user)
+            if current_count < 3:  # Free plan: 3 searches limit
+                return True, None
+            else:
+                return False, "You've reached your daily search limit of 3 searches. Please upgrade your plan."
+
+        # Inactive subscription
+        return False, "Your subscription is not active. Please subscribe to continue searching."
+
+    def can_export_summaries(self):
+        """Check if user can export/copy summaries based on their subscription plan"""
+        if self.status != 'active':
+            return False
+            
+        # These plans have export capability
+        exportable_plans = ['monthly', 'annual', 'student_monthly', 'student_annual']
+        return self.plan_id in exportable_plans
+
 
 class Transaction(models.Model):
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='transactions')
@@ -145,4 +173,40 @@ class Transaction(models.Model):
 
     def __str__(self):
         return f"{self.user.email} - ${self.amount} - {self.status}"
+
+
+class UserSearchCount(models.Model):
+    """Tracks user search usage for limiting free tier users"""
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='search_counts')
+    date = models.DateField(default=timezone.now)
+    count = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        unique_together = ('user', 'date')
+
+    @classmethod
+    def increment_search_count(cls, user):
+        """Increment the search count for a user for the current day"""
+        today = timezone.now().date()
+        count_obj, created = cls.objects.get_or_create(
+            user=user,
+            date=today,
+            defaults={'count': 1}
+        )
+        
+        if not created:
+            count_obj.count += 1
+            count_obj.save()
+            
+        return count_obj.count
+
+    @classmethod
+    def get_search_count(cls, user):
+        """Get the search count for a user for the current day"""
+        today = timezone.now().date()
+        try:
+            count_obj = cls.objects.get(user=user, date=today)
+            return count_obj.count
+        except cls.DoesNotExist:
+            return 0
 
