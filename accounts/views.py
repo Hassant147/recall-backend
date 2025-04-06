@@ -2149,18 +2149,14 @@ class CompleteStudentRegistrationView(APIView):
             if not serializer.is_valid():
                 return Response({"errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
-            # Check if OTP verification was completed
-            if not request.session.get('otp_verified'):
-                return Response({"error": "OTP verification required"}, status=status.HTTP_400_BAD_REQUEST)
-
-            # Check email matches the verification email
+            # Get email from request data
             email = serializer.validated_data["email"]
-            if email != request.session.get('signup_email'):
-                return Response({"error": "Email mismatch with verified email"}, status=status.HTTP_400_BAD_REQUEST)
-
-            if request.session.get('signup_type') != 'student':
-                return Response({"error": "Invalid registration type"}, status=status.HTTP_400_BAD_REQUEST)
-
+            
+            # Check if email was verified using Redis
+            verified = redis_client.get(f"verified:{email}")
+            if not verified:
+                return Response({"error": "OTP verification required"}, status=status.HTTP_400_BAD_REQUEST)
+            
             # Create CustomUser
             user = CustomUser.objects.create_user(
                 email=email,
@@ -2181,10 +2177,8 @@ class CompleteStudentRegistrationView(APIView):
                 terms_and_conditions=serializer.validated_data["terms_and_conditions"],
             )
 
-            # Clear session data
-            for key in ['signup_otp', 'signup_email', 'otp_created_at', 'otp_verified', 'signup_type']:
-                if key in request.session:
-                    del request.session[key]
+            # Clean up Redis
+            redis_client.delete(f"verified:{email}")
 
             # Log the user in
             login(request, user)
