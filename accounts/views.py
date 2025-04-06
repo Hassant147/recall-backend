@@ -2194,6 +2194,7 @@ class CompleteStudentRegistrationView(APIView):
 # ---- Consolidated User Signup (OTP Sending) ----
 
 class SendOTPView(APIView):
+    permission_classes = [permissions.AllowAny]
     """
     Consolidated endpoint for sending OTP for any user type (individual, company, student).
     """
@@ -2256,6 +2257,7 @@ class SendOTPView(APIView):
 # ---- Verify OTP (Consolidated) ----
 
 class VerifyOTPView(APIView):
+    permission_classes = [permissions.AllowAny]
     """
     Consolidated endpoint to verify OTP for any user type.
     """
