@@ -2225,11 +2225,13 @@ class SendOTPView(APIView):
             # Generate 6-digit OTP
             otp = "".join([str(random.randint(0, 9)) for _ in range(6)])
 
-            # Store OTP in session
-            request.session['signup_otp'] = otp
-            request.session['signup_email'] = email
-            request.session['signup_type'] = user_type
-            request.session['otp_created_at'] = datetime.now().timestamp()
+            # Store OTP and registration details in Redis (valid for 10 minutes)
+            otp_data = {
+                "otp": otp,
+                "user_type": user_type,
+                "created_at": datetime.now().timestamp()
+            }
+            redis_client.setex(f"signup_otp:{email}", 600, json.dumps(otp_data))
 
             # Set appropriate subject based on user_type
             if user_type == 'individual':
@@ -2282,30 +2284,29 @@ class VerifyOTPView(APIView):
             email = serializer.validated_data["email"]
             otp = serializer.validated_data["otp"]
 
-            # Verify session data
-            if not request.session.get('signup_otp') or not request.session.get('signup_email'):
+            # Retrieve OTP data from Redis
+            otp_data_str = redis_client.get(f"signup_otp:{email}")
+            if not otp_data_str:
                 return Response({"error": "No OTP session found. Please request a new OTP"}, status=status.HTTP_400_BAD_REQUEST)
 
-            if email != request.session.get('signup_email'):
-                return Response({"error": "Email mismatch"}, status=status.HTTP_400_BAD_REQUEST)
+            otp_data = json.loads(otp_data_str)
 
-            # Get the user type from session
-            user_type = request.session.get('signup_type')
+            # Check OTP expiration (10 minutes)
+            created_at = otp_data.get("created_at")
+            if not created_at or (datetime.now().timestamp() - created_at) > 600:
+                return Response({"error": "OTP expired. Please request a new one"}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Compare OTP
+            if otp != otp_data.get("otp"):
+                return Response({"error": "Invalid OTP"}, status=status.HTTP_400_BAD_REQUEST)
+
+            user_type = otp_data.get("user_type")
             if not user_type or user_type not in ['individual', 'company', 'student']:
                 return Response({"error": "Invalid registration type"}, status=status.HTTP_400_BAD_REQUEST)
 
-            # Check OTP expiration (10 minutes)
-            otp_created_at = request.session.get('otp_created_at')
-            if not otp_created_at or (datetime.now().timestamp() - otp_created_at) > 600:
-                return Response({"error": "OTP expired. Please request a new one"}, status=status.HTTP_400_BAD_REQUEST)
+            # Optionally, delete the OTP data from Redis upon successful verification
+            redis_client.delete(f"signup_otp:{email}")
 
-            if otp != request.session.get('signup_otp'):
-                return Response({"error": "Invalid OTP"}, status=status.HTTP_400_BAD_REQUEST)
-
-            # OTP verified, set verification flag in session
-            request.session['otp_verified'] = True
-
-            # Return the user type in the response so frontend knows which registration to complete
             return Response({
                 "message": "OTP verified successfully", 
                 "user_type": user_type
