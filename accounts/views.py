@@ -847,8 +847,7 @@ class CheckSubscriptionView(APIView):
                                 "plan_id": openapi.Schema(type=openapi.TYPE_STRING),
                                 "plan_name": openapi.Schema(type=openapi.TYPE_STRING),
                                 "current_period_end": openapi.Schema(type=openapi.TYPE_STRING, format="date-time"),
-                                "status": openapi.Schema(type=openapi.TYPE_STRING),
-                                "customer_portal_url": openapi.Schema(type=openapi.TYPE_STRING, nullable=True)
+                                "status": openapi.Schema(type=openapi.TYPE_STRING)
                             }
                         )
                     }
@@ -872,8 +871,7 @@ class CheckSubscriptionView(APIView):
                     "plan_id": subscription.plan_id,
                     "plan_name": self.get_plan_name(subscription.plan_id),
                     "status": subscription.status,
-                    "current_period_end": subscription.current_period_end.isoformat() if subscription.current_period_end else None,
-                    "customer_portal_url": self.get_customer_portal_url(subscription.stripe_customer_id) if subscription.stripe_customer_id else None
+                    "current_period_end": subscription.current_period_end.isoformat() if subscription.current_period_end else None
                 }
             except Subscription.DoesNotExist:
                 # No subscription found, return default data
@@ -882,8 +880,7 @@ class CheckSubscriptionView(APIView):
                     "plan_id": "free",
                     "plan_name": "Free Plan",
                     "status": "inactive",
-                    "current_period_end": None,
-                    "customer_portal_url": None
+                    "current_period_end": None
                 }
             
             return Response({"subscription": subscription_data}, status=status.HTTP_200_OK)
@@ -922,22 +919,6 @@ class CheckSubscriptionView(APIView):
                 
             # Return a formatted version of the ID as last resort
             return plan_id.replace('_', ' ').title()
-    
-    def get_customer_portal_url(self, stripe_customer_id):
-        """Create a customer portal session for managing subscription"""
-        try:
-            if not stripe_customer_id:
-                return None
-                
-            # Create portal session
-            session = stripe.billing_portal.Session.create(
-                customer=stripe_customer_id,
-                return_url=f"{settings.FRONTEND_URL}/dashboard",
-            )
-            return session.url
-        except Exception as e:
-            print(f"Error creating customer portal: {e}")
-            return None
 
 # ---- Forgot Password (Send OTP) ----
 @method_decorator(csrf_exempt, name='dispatch')
