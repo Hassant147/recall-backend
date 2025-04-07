@@ -210,47 +210,67 @@ def update_subscription_from_stripe(subscription, stripe_sub):
     """
     Update our subscription model with data from the Stripe subscription
     """
-    # Get the subscription period
-    if 'current_period_start' in stripe_sub:
-        subscription.current_period_start = datetime.fromtimestamp(stripe_sub['current_period_start'])
-    
-    if 'current_period_end' in stripe_sub:
-        subscription.current_period_end = datetime.fromtimestamp(stripe_sub['current_period_end'])
-    
-    # Get plan information
-    if 'plan' in stripe_sub and 'items' in stripe_sub and 'data' in stripe_sub['items']:
-        # In case of Stripe price changes, might need to extract information from items
-        if stripe_sub['items']['data']:
-            plan = stripe_sub['items']['data'][0].get('plan', {})
-            product_id = plan.get('product')
+    try:
+        # Get the subscription period
+        if 'current_period_start' in stripe_sub:
+            subscription.current_period_start = datetime.fromtimestamp(stripe_sub['current_period_start'])
+        
+        if 'current_period_end' in stripe_sub:
+            subscription.current_period_end = datetime.fromtimestamp(stripe_sub['current_period_end'])
+        
+        # Get plan information
+        if 'items' in stripe_sub and 'data' in stripe_sub['items'] and stripe_sub['items']['data']:
+            item = stripe_sub['items']['data'][0]
+            price = item.get('price', {})
+            product_id = price.get('product')
             
             if product_id:
                 try:
-                    # Retrieve the product from Stripe to get its metadata
+                    # Get the product details from Stripe
                     product = stripe.Product.retrieve(product_id)
+                    print(f"Retrieved Stripe product: {product}")
                     
-                    # Extract the internal plan_id from the product metadata
-                    internal_plan_id = product.metadata.get('plan_id')
+                    # Get the price details
+                    price_details = stripe.Price.retrieve(price['id'])
+                    print(f"Retrieved Stripe price: {price_details}")
                     
-                    if internal_plan_id:
-                        # Use the internal plan_id from metadata
-                        subscription.plan_id = internal_plan_id
-                        print(f"Mapped Stripe product ID {product_id} to internal plan ID {internal_plan_id}")
+                    # Map based on price amount and interval
+                    amount = price_details.get('unit_amount', 0) / 100  # Convert from cents
+                    interval = price_details.get('recurring', {}).get('interval', '')
+                    
+                    # Map to internal plan IDs based on amount and interval
+                    if amount == 799 and interval == 'month':
+                        subscription.plan_id = 'student_monthly'
+                    elif amount == 7999 and interval == 'year':
+                        subscription.plan_id = 'student_annual'
+                    elif amount == 1499 and interval == 'month':
+                        subscription.plan_id = 'monthly'
+                    elif amount == 14999 and interval == 'year':
+                        subscription.plan_id = 'annual'
+                    elif amount == 149 and interval == 'day':
+                        subscription.plan_id = 'daily'
+                    elif amount == 0:
+                        subscription.plan_id = 'free'
                     else:
-                        # Fallback to product ID if metadata doesn't contain plan_id
+                        print(f"Unknown price amount {amount} and interval {interval}")
                         subscription.plan_id = product_id
-                        print(f"No plan_id in metadata for product {product_id}, using product ID")
+                    
+                    print(f"Mapped Stripe product {product_id} to plan {subscription.plan_id}")
                 except Exception as e:
-                    # If there's an error retrieving the product, fallback to using the product ID
+                    print(f"Error retrieving product details: {str(e)}")
                     subscription.plan_id = product_id
-                    print(f"Error retrieving product {product_id}: {str(e)}, using product ID")
-    
-    # Update subscription status
-    subscription.status = stripe_sub['status']
-    subscription.stripe_subscription_id = stripe_sub['id']
-    
-    # Save changes
-    subscription.save()
+        
+        # Update subscription status
+        subscription.status = stripe_sub['status']
+        subscription.stripe_subscription_id = stripe_sub['id']
+        subscription.save()
+        
+        print(f"Updated subscription {subscription.id} with status {subscription.status} and plan {subscription.plan_id}")
+        
+    except Exception as e:
+        print(f"Error in update_subscription_from_stripe: {str(e)}")
+        import traceback
+        traceback.print_exc()
 
 def create_transaction_from_invoice(user, invoice):
     """
