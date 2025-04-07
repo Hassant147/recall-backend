@@ -159,6 +159,9 @@ class LoginView(APIView):
             # Get user specific data based on user type
             user_data = {"user": CustomUserSerializer(user).data}
             
+            # Check if user is an employee
+            is_employee = False
+            
             if user.is_company:
                 company = Company.objects.get(user=user)
                 user_data["profile"] = CompanySerializer(company).data
@@ -170,8 +173,12 @@ class LoginView(APIView):
                     try:
                         employee = Employee.objects.get(user=user)
                         user_data["profile"] = EmployeeSerializer(employee).data
+                        is_employee = True
                     except Employee.DoesNotExist:
                         user_data["profile"] = None
+            
+            # Add is_employee flag to response
+            user_data["is_employee"] = is_employee
             
             # Include session ID in response so frontend can store it
             user_data["session_id"] = request.session.session_key
@@ -636,7 +643,8 @@ class SaveQueryView(APIView):
         responses={
             201: openapi.Response("Query saved successfully", QuerySerializer),
             400: "Invalid request data",
-            401: "Authentication required"
+            401: "Authentication required",
+            402: "Payment required"
         }
     )
     def post(self, request):
@@ -647,6 +655,40 @@ class SaveQueryView(APIView):
                     {"error": "Missing required fields: query, documents, and summary are required"},
                     status=status.HTTP_400_BAD_REQUEST
                 )
+
+            user = request.user
+            
+            # Check if user is an employee
+            is_employee = False
+            try:
+                employee = Employee.objects.get(user=user)
+                is_employee = True
+                # If user is an employee, use their company's subscription
+                company_user = employee.company.user
+                subscription = Subscription.objects.get(user=company_user)
+            except Employee.DoesNotExist:
+                # If not an employee, use user's own subscription
+                try:
+                    subscription = Subscription.objects.get(user=user)
+                except Subscription.DoesNotExist:
+                    # Create a free subscription for the user if none exists
+                    subscription = Subscription.objects.create(
+                        user=user,
+                        plan_id='free',
+                        status='active'
+                    )
+            
+            # Check if user can perform search
+            can_search, error_message = subscription.can_perform_search()
+            if not can_search:
+                return Response(
+                    {"error": error_message, "upgrade_required": True}, 
+                    status=status.HTTP_402_PAYMENT_REQUIRED
+                )
+            
+            # Increment search count for the user (skip for employees as they use company's subscription)
+            if not is_employee:
+                UserSearchCount.increment_search_count(user)
 
             # Create the query
             query = Query.objects.create(
@@ -798,12 +840,25 @@ class CreateCheckoutSessionView(APIView):
                     }
                 )
             ),
-            400: "Error creating checkout session"
+            400: "Error creating checkout session",
+            403: "Employees cannot subscribe to plans"
         }
     )
     def post(self, request):
         try:
             user = request.user
+            
+            # Check if user is an employee
+            try:
+                is_employee = Employee.objects.filter(user=user).exists()
+                if is_employee:
+                    return Response(
+                        {"error": "Employees cannot subscribe to plans. Please use your company's subscription."},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+            except Exception as e:
+                pass  # Continue if error checking employee status
+                
             plan_id = request.data.get("plan_id")
             success_url = request.data.get("success_url", settings.FRONTEND_URL + "/payment-success")
             cancel_url = request.data.get("cancel_url", settings.FRONTEND_URL + "/plans")
@@ -901,7 +956,17 @@ class CheckSubscriptionView(APIView):
     )
     def get(self, request):
         try:
-            subscription = Subscription.objects.get(user=request.user)
+            user = request.user
+            
+            # Check if user is an employee
+            try:
+                employee = Employee.objects.get(user=user)
+                # If user is an employee, use their company's subscription
+                company_user = employee.company.user
+                subscription = Subscription.objects.get(user=company_user)
+            except Employee.DoesNotExist:
+                # If not an employee, use user's own subscription
+                subscription = Subscription.objects.get(user=user)
             
             # Map Stripe product IDs to internal plan IDs
             plan_mapping = {
@@ -1937,7 +2002,17 @@ class CheckUserFeaturesView(APIView):
     )
     def get(self, request):
         try:
-            subscription = Subscription.objects.get(user=request.user)
+            user = request.user
+            
+            # Check if user is an employee
+            try:
+                employee = Employee.objects.get(user=user)
+                # If user is an employee, use their company's subscription
+                company_user = employee.company.user
+                subscription = Subscription.objects.get(user=company_user)
+            except Employee.DoesNotExist:
+                # If not an employee, use user's own subscription
+                subscription = Subscription.objects.get(user=user)
             
             # Map Stripe product IDs to internal plan IDs
             plan_mapping = {
@@ -2037,16 +2112,23 @@ class CheckExportPermissionView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
         
-        # Check subscription
+        # Check if user is an employee
         try:
-            subscription = Subscription.objects.get(user=user)
-        except Subscription.DoesNotExist:
-            # Create a free subscription for the user if none exists
-            subscription = Subscription.objects.create(
-                user=user,
-                plan_id='free',
-                status='active'
-            )
+            employee = Employee.objects.get(user=user)
+            # If user is an employee, use their company's subscription
+            company_user = employee.company.user
+            subscription = Subscription.objects.get(user=company_user)
+        except Employee.DoesNotExist:
+            # If not an employee, use user's own subscription
+            try:
+                subscription = Subscription.objects.get(user=user)
+            except Subscription.DoesNotExist:
+                # Create a free subscription for the user if none exists
+                subscription = Subscription.objects.create(
+                    user=user,
+                    plan_id='free',
+                    status='active'
+                )
         
         # Check if user's plan allows exports
         can_export = subscription.can_export_summaries()
