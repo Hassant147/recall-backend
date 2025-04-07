@@ -161,4 +161,88 @@ def send_subscription_cancelled_email(user, subscription, plan_name):
         template_name='email/subscription_cancelled.html',
         context=context,
         recipient_list=[user.email]
+    )
+
+def send_welcome_email(user, user_type='individual'):
+    """
+    Send welcome email to new users upon registration completion.
+    
+    Parameters:
+    - user: The CustomUser instance
+    - user_type: 'individual', 'company', 'student', or 'employee'
+    """
+    # Get user's name based on user type
+    user_name = user.email.split('@')[0]  # Default fallback
+    company_name = None
+    
+    try:
+        from .models import IndividualUser, Company, StudentUser, Employee, Subscription
+        
+        if user_type == 'company':
+            company = Company.objects.filter(user=user).first()
+            if company:
+                user_name = company.name
+        elif user_type == 'individual':
+            individual = IndividualUser.objects.filter(user=user).first()
+            if individual:
+                user_name = f"{individual.first_name} {individual.last_name}"
+        elif user_type == 'student':
+            student = StudentUser.objects.filter(user=user).first()
+            if student:
+                user_name = f"{student.first_name} {student.last_name}"
+        elif user_type == 'employee':
+            employee = Employee.objects.filter(user=user).first()
+            if employee:
+                user_name = f"{employee.first_name} {employee.last_name}"
+                if employee.company:
+                    company_name = employee.company.name
+    except Exception as e:
+        logger.error(f"Error getting user name for welcome email: {str(e)}")
+    
+    # Get subscription plan information
+    plan_id = 'free'  # Default
+    plan_name = 'Free Plan'
+    
+    try:
+        # For employees, get their company's subscription
+        if user_type == 'employee':
+            employee = Employee.objects.filter(user=user).first()
+            if employee and employee.company:
+                subscription = Subscription.objects.filter(user=employee.company.user).first()
+            else:
+                subscription = None
+        else:
+            subscription = Subscription.objects.filter(user=user).first()
+            
+        if subscription and subscription.plan_id:
+            plan_id = subscription.plan_id
+            # Try to get a better plan name
+            from .models import SubscriptionPlan
+            plan = SubscriptionPlan.objects.filter(plan_id=plan_id).first()
+            if plan and plan.name:
+                plan_name = plan.name
+            else:
+                # Fallback to a formatted version of the plan ID
+                plan_name = plan_id.replace('_', ' ').title() + ' Plan'
+    except Exception as e:
+        logger.error(f"Error getting subscription plan for welcome email: {str(e)}")
+    
+    context = {
+        'user_name': user_name,
+        'user_type': user_type,
+        'plan_id': plan_id,
+        'plan_name': plan_name,
+        'dashboard_url': f"{settings.FRONTEND_URL}/dashboard",
+        'plans_url': f"{settings.FRONTEND_URL}/plans"
+    }
+    
+    # Add company name for employees
+    if company_name:
+        context['company_name'] = company_name
+    
+    return send_template_email(
+        subject=f"Welcome to Recall",
+        template_name='email/welcome_user.html',
+        context=context,
+        recipient_list=[user.email]
     ) 

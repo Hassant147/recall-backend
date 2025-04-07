@@ -49,7 +49,8 @@ from .email_utils import (
     send_employee_registration_email, 
     send_subscription_invoice_email,
     send_subscription_renewed_email,
-    send_subscription_cancelled_email
+    send_subscription_cancelled_email,
+    send_welcome_email
 )
 
 load_dotenv()
@@ -374,6 +375,12 @@ class CompleteIndividualRegistrationView(APIView):
             # Include session ID in response so frontend can store it
             user_data["session_id"] = request.session.session_key
             
+            # Send welcome email
+            try:
+                send_welcome_email(user, user_type='individual')
+            except Exception as e:
+                print(f"Failed to send welcome email: {str(e)}")
+            
             return Response(user_data, status=status.HTTP_201_CREATED)
         except Exception as e:
             return Response({"error": "Registration failed", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -528,6 +535,12 @@ class CompleteCompanyRegistrationView(APIView):
             
             # Include session ID in response so frontend can store it
             company_data["session_id"] = request.session.session_key
+            
+            # Send welcome email
+            try:
+                send_welcome_email(user, user_type='company')
+            except Exception as e:
+                print(f"Failed to send welcome email: {str(e)}")
             
             return Response(company_data, status=status.HTTP_201_CREATED)
         except Exception as e:
@@ -1392,6 +1405,12 @@ class CompleteEmployeeRegistrationView(APIView):
             except Exception as e:
                 # Log the error but don't fail registration
                 print(f"Failed to send employee registration email: {str(e)}")
+            
+            # Send welcome email to employee
+            try:
+                send_welcome_email(custom_user, user_type='employee')
+            except Exception as e:
+                print(f"Failed to send welcome email: {str(e)}")
             
             # Automatically log the user in
             user = authenticate(request, email=email, password=data["password"])
@@ -2337,6 +2356,12 @@ class CompleteStudentRegistrationView(APIView):
             }
 
             user_data["session_id"] = request.session.session_key
+            
+            # Send welcome email
+            try:
+                send_welcome_email(user, user_type='student')
+            except Exception as e:
+                print(f"Failed to send welcome email: {str(e)}")
             
             return Response(user_data, status=status.HTTP_201_CREATED)
         except Exception as e:

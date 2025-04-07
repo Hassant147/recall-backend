@@ -1,0 +1,61 @@
+{% extends "email/base_email.html" %}
+
+{% block title %}Welcome to Recall{% endblock %}
+
+{% block header %}
+    Welcome to Recall, {{ user_name }}!
+{% endblock %}
+
+{% block content %}
+    <p>Thank you for joining Recall! We're excited to have you on board.</p>
+    
+    <p>Recall is your go-to platform for medical research and knowledge retrieval. With our advanced search capabilities, you can quickly find relevant information from medical literature and documents.</p>
+    
+    {% if user_type == 'company' %}
+    <p>As a company account, you can:</p>
+    <ul style="padding-left: 20px;">
+        <li>Invite team members to your account</li>
+        <li>Share your subscription benefits with your entire team</li>
+        <li>Manage team access through your company dashboard</li>
+        <li>Track team usage and activity</li>
+    </ul>
+    {% elif user_type == 'student' %}
+    <p>As a student, you can:</p>
+    <ul style="padding-left: 20px;">
+        <li>Access specialized student subscription plans at discounted rates</li>
+        <li>Use Recall for your medical research and studies</li>
+        <li>Stay updated with the latest medical information</li>
+    </ul>
+    {% elif user_type == 'employee' %}
+    <p>As an employee of {{ company_name }}, you can:</p>
+    <ul style="padding-left: 20px;">
+        <li>Access all features provided by your company's subscription</li>
+        <li>Collaborate with your team on research projects</li>
+        <li>Use Recall for your work-related medical research</li>
+    </ul>
+    <p>Your access is managed through your company's subscription.</p>
+    {% else %}
+    <p>With your account, you can:</p>
+    <ul style="padding-left: 20px;">
+        <li>Perform advanced medical literature searches</li>
+        <li>Get quick summaries of complex medical documents</li>
+        <li>Save and organize your research findings</li>
+        <li>Export results for your reference</li>
+    </ul>
+    {% endif %}
+    
+    <p>You're currently on the <span class="highlight">{{ plan_name }}</span> plan. {% if user_type != 'employee' %}You can upgrade anytime to access more features.{% endif %}</p>
+    
+    <p>If you have any questions or need assistance, our support team is always ready to help.</p>
+{% endblock %}
+
+{% block cta %}
+    <p style="text-align: center;">
+        <a href="{{ dashboard_url }}" class="button">Go to Dashboard</a>
+    </p>
+    {% if plan_id == 'free' and user_type != 'employee' %}
+    <p style="text-align: center; font-size: 14px; margin-top: 5px;">
+        <a href="{{ plans_url }}" style="color: #7f8c8d; text-decoration: none;">View our subscription plans</a>
+    </p>
+    {% endif %}
+{% endblock %} 
