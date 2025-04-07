@@ -2471,18 +2471,17 @@ class SendOTPView(APIView):
 # ---- Verify OTP (Consolidated) ----
 @method_decorator(csrf_exempt, name='dispatch')
 class VerifyOTPView(APIView):
+    """
+    Verify OTP and store email verification status.
+    """
     authentication_classes = [CsrfExemptSessionAuthentication]
     permission_classes = [permissions.AllowAny]
-    """
-    Consolidated endpoint to verify OTP for any user type.
-    """
+    
     @swagger_auto_schema(
-        operation_description="Verify OTP for any user type",
         request_body=VerifyOTPSerializer,
         responses={
-            200: openapi.Response("OTP verified successfully"),
-            400: "Invalid OTP, email mismatch, or session expired",
-            500: "Server error"
+            200: openapi.Response("OTP verification successful"),
+            400: "Invalid OTP or expired"
         }
     )
     def post(self, request):
@@ -2490,53 +2489,39 @@ class VerifyOTPView(APIView):
             serializer = VerifyOTPSerializer(data=request.data)
             if not serializer.is_valid():
                 return Response({"errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
-
+            
             email = serializer.validated_data["email"]
             otp = serializer.validated_data["otp"]
-
-            # Retrieve OTP data from Redis
-            otp_data_str = redis_client.get(f"signup_otp:{email}")
-            if not otp_data_str:
-                return Response({"error": "No OTP session found. Please request a new OTP"}, status=status.HTTP_400_BAD_REQUEST)
-
-            otp_data = json.loads(otp_data_str)
-
-            # Verify OTP
-            otp_data_json = redis_client.get(f"signup_otp:{email}")
-            if not otp_data_json:
+            
+            # Get OTP from Redis
+            stored_otp = redis_client.get(f"otp:{email}")
+            if not stored_otp:
                 return Response({"errors": "OTP expired or not found"}, status=status.HTTP_400_BAD_REQUEST)
-                
-            try:
-                otp_data = json.loads(otp_data_json)
-            except json.JSONDecodeError:
-                return Response({"errors": "Invalid OTP data"}, status=status.HTTP_400_BAD_REQUEST)
-                
-            # Check if OTP matches
-            if otp_data.get("otp") != otp:
+            
+            # Compare OTP
+            if otp != stored_otp.decode('utf-8'):
                 return Response({"errors": "Invalid OTP"}, status=status.HTTP_400_BAD_REQUEST)
-                
-            # Check if OTP is expired (10 minutes validity)
-            created_at = otp_data.get("created_at", 0)
-            now = datetime.now().timestamp()
-            if now - created_at > 600:  # 10 minutes
-                return Response({"errors": "OTP expired"}, status=status.HTTP_400_BAD_REQUEST)
-
-            user_type = otp_data.get("user_type")
-            if not user_type or user_type not in ['individual', 'company', 'student']:
-                return Response({"error": "Invalid registration type"}, status=status.HTTP_400_BAD_REQUEST)
-
-            # Optionally, delete the OTP data from Redis upon successful verification
-            redis_client.delete(f"signup_otp:{email}")
-
-            # Set verification flag in Redis (valid for 30 minutes)
-            redis_client.setex(f"verified:{email}", 1800, "true")
-
+            
+            # Get user type
+            user_type = redis_client.get(f"signup_type:{email}")
+            if user_type:
+                user_type = user_type.decode('utf-8')
+            else:
+                user_type = "individual"  # Default fallback
+            
+            # Mark email as verified (valid for 30 minutes)
+            redis_client.setex(f"verified:{email}", 1800, user_type)
+            
+            # Clean up OTP keys
+            redis_client.delete(f"otp:{email}")
+            redis_client.delete(f"signup_type:{email}")
+            
             return Response({
-                "message": "OTP verified successfully", 
+                "message": "OTP verification successful", 
                 "user_type": user_type
             }, status=status.HTTP_200_OK)
         except Exception as e:
-            return Response({"error": "OTP verification failed", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"errors": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 # ---- Student Approval Status ----
 @method_decorator(csrf_exempt, name='dispatch')
