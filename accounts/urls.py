@@ -4,7 +4,7 @@ from .views import (
     CompanySignupView, VerifyCompanyOTPView, CompleteCompanyRegistrationView, GetQueriesByUserView, GetQueryResponseByIdView,
     ForgotPasswordView, ResetPasswordView, ChangePasswordView, RefreshSessionView, SaveQueryView, QueryDetailView,
     CheckSubscriptionView, InviteEmployeeView, CompleteEmployeeRegistrationView, CompanyEmployeesView,
-    CreateCheckoutSessionView, CustomerPortalView, CompanyEmployeeDetailView, StudentSignupView, VerifyStudentOTPView, 
+    CreateCheckoutSessionView, CompanyEmployeeDetailView, StudentSignupView, VerifyStudentOTPView, 
     CompleteStudentRegistrationView, CheckUserFeaturesView, CheckExportPermissionView,
     SendOTPView, VerifyOTPView, StudentApprovalStatusView,
     SyncStripeTransactionsView,
