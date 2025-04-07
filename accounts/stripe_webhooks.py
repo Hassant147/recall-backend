@@ -221,43 +221,26 @@ def update_subscription_from_stripe(subscription, stripe_sub):
         # Get plan information
         if 'items' in stripe_sub and 'data' in stripe_sub['items'] and stripe_sub['items']['data']:
             item = stripe_sub['items']['data'][0]
-            price = item.get('price', {})
-            product_id = price.get('product')
+            price_id = item.get('price', {}).get('id')
             
-            if product_id:
-                try:
-                    # Get the product details from Stripe
-                    product = stripe.Product.retrieve(product_id)
-                    print(f"Retrieved Stripe product: {product}")
-                    
-                    # Get the price details
-                    price_details = stripe.Price.retrieve(price['id'])
-                    print(f"Retrieved Stripe price: {price_details}")
-                    
-                    # Map based on price amount and interval
-                    amount = price_details.get('unit_amount', 0) / 100  # Convert from cents
-                    interval = price_details.get('recurring', {}).get('interval', '')
-                    
-                    # Map to internal plan IDs based on amount and interval
-                    if amount == 799 and interval == 'month':
-                        subscription.plan_id = 'student_monthly'
-                    elif amount == 7999 and interval == 'year':
-                        subscription.plan_id = 'student_annual'
-                    elif amount == 1499 and interval == 'month':
-                        subscription.plan_id = 'monthly'
-                    elif amount == 14999 and interval == 'year':
-                        subscription.plan_id = 'annual'
-                    elif amount == 149 and interval == 'day':
-                        subscription.plan_id = 'daily'
-                    elif amount == 0:
-                        subscription.plan_id = 'free'
-                    else:
-                        print(f"Unknown price amount {amount} and interval {interval}")
-                        subscription.plan_id = product_id
-                    
-                    print(f"Mapped Stripe product {product_id} to plan {subscription.plan_id}")
-                except Exception as e:
-                    print(f"Error retrieving product details: {str(e)}")
+            if price_id:
+                # Map Stripe price IDs to internal plan IDs
+                price_mapping = {
+                    'price_1RArESRrRHqE0EfDltTgBLo9': 'daily',           # Daily Plan
+                    'price_1RArETRrRHqE0EfD083TWniN': 'monthly',         # Monthly Plan
+                    'price_1RArEURrRHqE0EfDtKuOiKXy': 'annual',          # Annual Plan
+                    'price_1RArEURrRHqE0EfD1XiSE1DB': 'student_monthly', # Student Monthly Plan
+                    'price_1RArEVRrRHqE0EfDUHIz9UUo': 'student_annual'   # Student Annual Plan
+                }
+                
+                internal_plan_id = price_mapping.get(price_id)
+                if internal_plan_id:
+                    subscription.plan_id = internal_plan_id
+                    print(f"Mapped Stripe price ID {price_id} to internal plan ID {internal_plan_id}")
+                else:
+                    print(f"Unknown Stripe price ID: {price_id}")
+                    # Fallback to using the product ID if no mapping exists
+                    product_id = item.get('price', {}).get('product')
                     subscription.plan_id = product_id
         
         # Update subscription status
