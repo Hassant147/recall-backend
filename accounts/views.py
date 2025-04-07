@@ -2383,3 +2383,47 @@ class StudentApprovalStatusView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+# ---- Sync Stripe Transactions ----
+@method_decorator(csrf_exempt, name='dispatch')
+class SyncStripeTransactionsView(APIView):
+    """
+    Sync missing transactions from Stripe.
+    This is an admin-only endpoint to ensure transaction records are up to date.
+    """
+    authentication_classes = [CsrfExemptSessionAuthentication]
+    permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
+
+    @swagger_auto_schema(
+        operation_description="Syncs missing transactions from Stripe",
+        responses={
+            200: "Transactions synced successfully",
+            403: "Permission denied",
+            500: "Error syncing transactions"
+        }
+    )
+    def post(self, request):
+        try:
+            from .stripe_webhooks import sync_missing_transactions
+            
+            # Only admins can run this
+            if not request.user.is_staff and not request.user.is_superuser:
+                return Response(
+                    {"error": "Permission denied. Admin access required."}, 
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            
+            # Run the sync in a background task if possible
+            # For simplicity, we're running it synchronously here
+            # In production, you might want to use a task queue like Celery
+            sync_missing_transactions()
+            
+            return Response(
+                {"message": "Transactions synced successfully"}, 
+                status=status.HTTP_200_OK
+            )
+        except Exception as e:
+            return Response(
+                {"error": f"Error syncing transactions: {str(e)}"}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+

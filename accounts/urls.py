@@ -11,7 +11,8 @@ from .views import (
     SubscriptionPlansView, BillingHistoryView, ActivateSubscriptionView,
     RefreshSessionView, SessionStatusView, CancelSubscriptionView,
     CheckUserFeaturesView, CheckExportPermissionView,
-    SendOTPView, VerifyOTPView, StudentApprovalStatusView
+    SendOTPView, VerifyOTPView, StudentApprovalStatusView,
+    SyncStripeTransactionsView
 )
 from .stripe_webhooks import stripe_webhook
 
@@ -74,4 +75,5 @@ urlpatterns = [
     
     # Stripe Webhook
     path('webhook/stripe/', stripe_webhook, name="stripe_webhook"),
+    path('admin/sync-stripe-transactions/', SyncStripeTransactionsView.as_view(), name="sync_stripe_transactions"),
 ]

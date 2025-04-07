@@ -225,10 +225,25 @@ def update_subscription_from_stripe(subscription, stripe_sub):
             product_id = plan.get('product')
             
             if product_id:
-                # Here you might want to map product IDs to your plan IDs
-                # For simple implementation, just use product ID for now
-                # In a real-world scenario, you'd have a mapping from Stripe Product ID to your plan IDs
-                subscription.plan_id = product_id
+                try:
+                    # Retrieve the product from Stripe to get its metadata
+                    product = stripe.Product.retrieve(product_id)
+                    
+                    # Extract the internal plan_id from the product metadata
+                    internal_plan_id = product.metadata.get('plan_id')
+                    
+                    if internal_plan_id:
+                        # Use the internal plan_id from metadata
+                        subscription.plan_id = internal_plan_id
+                        print(f"Mapped Stripe product ID {product_id} to internal plan ID {internal_plan_id}")
+                    else:
+                        # Fallback to product ID if metadata doesn't contain plan_id
+                        subscription.plan_id = product_id
+                        print(f"No plan_id in metadata for product {product_id}, using product ID")
+                except Exception as e:
+                    # If there's an error retrieving the product, fallback to using the product ID
+                    subscription.plan_id = product_id
+                    print(f"Error retrieving product {product_id}: {str(e)}, using product ID")
     
     # Update subscription status
     subscription.status = stripe_sub['status']
@@ -241,31 +256,110 @@ def create_transaction_from_invoice(user, invoice):
     """
     Create a transaction record from an invoice
     """
-    # Get the payment intent
-    payment_intent_id = invoice.get('payment_intent')
+    try:
+        # Get the payment intent
+        payment_intent_id = invoice.get('payment_intent')
+        
+        # Get the amount
+        amount = invoice.get('amount_paid', 0) / 100.0  # Convert from cents to pounds (GBP)
+        
+        # Get invoice URL or receipt URL if available
+        receipt_url = None
+        if payment_intent_id:
+            try:
+                payment_intent = stripe.PaymentIntent.retrieve(payment_intent_id)
+                charges = payment_intent.get('charges', {}).get('data', [])
+                if charges:
+                    receipt_url = charges[0].get('receipt_url')
+            except Exception as e:
+                print(f"Error getting receipt URL: {str(e)}")
+        
+        # Get better description with plan name if possible
+        description = invoice.get('description', 'subscription')
+        
+        # If there's a subscription ID, try to get more detailed info
+        subscription_id = invoice.get('subscription')
+        if subscription_id:
+            try:
+                subscription = stripe.Subscription.retrieve(subscription_id)
+                if 'items' in subscription and 'data' in subscription['items'] and subscription['items']['data']:
+                    plan = subscription['items']['data'][0].get('plan', {})
+                    product_id = plan.get('product')
+                    
+                    if product_id:
+                        try:
+                            product = stripe.Product.retrieve(product_id)
+                            plan_name = product.get('name', 'subscription')
+                            description = f"Payment for {plan_name}"
+                        except Exception:
+                            pass
+            except Exception as e:
+                print(f"Error getting subscription details for invoice: {str(e)}")
+        
+        # Check if transaction already exists
+        existing_transaction = Transaction.objects.filter(stripe_invoice_id=invoice['id']).first()
+        
+        if existing_transaction:
+            print(f"Transaction for invoice {invoice['id']} already exists, skipping")
+            return
+        
+        # Create transaction record
+        Transaction.objects.create(
+            user=user,
+            stripe_invoice_id=invoice['id'],
+            stripe_payment_intent_id=payment_intent_id,
+            amount=amount,
+            status='succeeded',
+            description=description,
+            receipt_url=receipt_url,
+            date=datetime.fromtimestamp(invoice['created'])
+        )
+        
+        print(f"Created transaction record for invoice {invoice['id']} ({description})")
+    except Exception as e:
+        print(f"Error creating transaction from invoice: {str(e)}")
+        import traceback
+        traceback.print_exc()
+
+def sync_missing_transactions():
+    """
+    Utility function to sync missing transactions from Stripe.
+    This can be run manually to ensure all transactions are recorded in the database.
+    """
+    from .models import CustomUser, Subscription, Transaction
     
-    # Get the amount
-    amount = invoice.get('amount_paid', 0) / 100.0  # Convert from cents to dollars
+    print("Starting to sync missing transactions from Stripe...")
     
-    # Get invoice URL or receipt URL if available
-    receipt_url = None
-    if payment_intent_id:
+    # Get all users with stripe_customer_id
+    subscriptions = Subscription.objects.filter(
+        stripe_customer_id__isnull=False
+    ).exclude(stripe_customer_id='')
+    
+    transaction_count = 0
+    
+    for subscription in subscriptions:
         try:
-            payment_intent = stripe.PaymentIntent.retrieve(payment_intent_id)
-            charges = payment_intent.get('charges', {}).get('data', [])
-            if charges:
-                receipt_url = charges[0].get('receipt_url')
-        except Exception:
-            pass
+            # Get all invoices for this customer
+            invoices = stripe.Invoice.list(
+                customer=subscription.stripe_customer_id,
+                limit=100
+            )
+            
+            for invoice in invoices.data:
+                # Skip if not paid
+                if invoice.status != 'paid':
+                    continue
+                
+                # Check if transaction already exists
+                existing = Transaction.objects.filter(stripe_invoice_id=invoice.id).exists()
+                if existing:
+                    continue
+                
+                # Create transaction
+                create_transaction_from_invoice(subscription.user, invoice)
+                transaction_count += 1
+                
+        except Exception as e:
+            print(f"Error syncing transactions for user {subscription.user.email}: {str(e)}")
     
-    # Create transaction record
-    Transaction.objects.create(
-        user=user,
-        stripe_invoice_id=invoice['id'],
-        stripe_payment_intent_id=payment_intent_id,
-        amount=amount,
-        status='succeeded',
-        description=f"Payment for {invoice.get('description') or 'subscription'}",
-        receipt_url=receipt_url,
-        date=datetime.fromtimestamp(invoice['created'])
-    )
+    print(f"Synced {transaction_count} missing transactions from Stripe.")
