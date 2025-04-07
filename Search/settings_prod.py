@@ -84,6 +84,8 @@ CORS_ALLOWED_ORIGINS = [
 ]
 # Add specific domain
 CORS_ALLOWED_ORIGINS.append("https://recall-web-backend-3cytq.ondigitalocean.app")
+CORS_ALLOWED_ORIGINS.append("https://recallguidelines.com")
+CORS_ALLOWED_ORIGINS.append("http://localhost:5173")
 
 if os.getenv('FRONTEND_URL'):
     CORS_ALLOWED_ORIGINS.append(os.getenv('FRONTEND_URL'))

@@ -178,6 +178,8 @@ CORS_ALLOWED_ORIGINS = [
     "https://23ed-2404-3100-1c8d-b871-2831-b68c-8b48-6d41.ngrok-free.app",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "https://recallguidelines.com",
+    "http://localhost:5173",
 ]
 
 # Set CORS_EXPOSE_HEADERS to allow frontend to access custom headers
