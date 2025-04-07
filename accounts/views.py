@@ -50,7 +50,8 @@ from .email_utils import (
     send_subscription_invoice_email,
     send_subscription_renewed_email,
     send_subscription_cancelled_email,
-    send_welcome_email
+    send_welcome_email,
+    send_otp_email
 )
 
 load_dotenv()
@@ -252,19 +253,27 @@ class IndividualSignupView(APIView):
             if CustomUser.objects.filter(email=email).exists():
                 return Response({"error": "Email already exists"}, status=status.HTTP_400_BAD_REQUEST)
 
+            # Generate and store 6-digit OTP
             otp = get_random_string(length=6, allowed_chars="0123456789")
-            redis_client.setex(f"otp:{email}", 300, otp)  # OTP valid for 5 minutes
-
-            send_mail(
-                subject="Your OTP Code",
-                message=f"Your OTP code is {otp}",
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[email],
-                fail_silently=False,
-            )
-            return Response({"message": "OTP sent to email"}, status=status.HTTP_200_OK)
+            redis_client.setex(f"otp:{email}", 300, otp)  # Expires in 5 minutes
+            
+            # Send OTP to email
+            try:
+                send_otp_email(
+                    email=email,
+                    otp_code=otp,
+                    action_type="individual registration",
+                    expiry_minutes=5
+                )
+                return Response({"message": "OTP sent to email"}, status=status.HTTP_200_OK)
+            except Exception as e:
+                return Response(
+                    {"error": "Failed to send OTP", "details": str(e)}, 
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+                
         except Exception as e:
-            return Response({"error": "Failed to send OTP", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"error": "Failed to process request", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 # ---- Verify OTP for Individual User ----
@@ -414,19 +423,27 @@ class CompanySignupView(APIView):
             if CustomUser.objects.filter(email=email).exists():
                 return Response({"error": "Email already exists"}, status=status.HTTP_400_BAD_REQUEST)
 
+            # Generate and store 6-digit OTP
             otp = get_random_string(length=6, allowed_chars="0123456789")
-            redis_client.setex(f"otp:{email}", 300, otp)  # OTP valid for 5 minutes
-
-            send_mail(
-                subject="Your Company Registration OTP",
-                message=f"Your OTP code for company registration is {otp}",
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[email],
-                fail_silently=False,
-            )
-            return Response({"message": "OTP sent to email"}, status=status.HTTP_200_OK)
+            redis_client.setex(f"otp:{email}", 300, otp)  # Expires in 5 minutes
+            
+            # Send OTP to email
+            try:
+                send_otp_email(
+                    email=email,
+                    otp_code=otp,
+                    action_type="company registration",
+                    expiry_minutes=5
+                )
+                return Response({"message": "OTP sent to email"}, status=status.HTTP_200_OK)
+            except Exception as e:
+                return Response(
+                    {"error": "Failed to send OTP", "details": str(e)}, 
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+                
         except Exception as e:
-            return Response({"error": "Failed to send OTP", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"error": "Failed to process request", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 # ---- Verify OTP for Company ----
@@ -1123,12 +1140,31 @@ class ForgotPasswordView(APIView):
 
             try:
                 print(f"Sending OTP email to {email}")
-                send_mail(
-                    subject="Password Reset OTP",
-                    message=f"Your OTP code for password reset is {otp}",
-                    from_email=settings.DEFAULT_FROM_EMAIL,
-                    recipient_list=[email],
-                    fail_silently=False,
+                
+                # Get user's name if available
+                user_name = None
+                try:
+                    from .models import IndividualUser, Company, StudentUser
+                    individual = IndividualUser.objects.filter(user=user).first()
+                    if individual:
+                        user_name = f"{individual.first_name} {individual.last_name}"
+                    else:
+                        company = Company.objects.filter(user=user).first()
+                        if company:
+                            user_name = company.name
+                        else:
+                            student = StudentUser.objects.filter(user=user).first()
+                            if student:
+                                user_name = f"{student.first_name} {student.last_name}"
+                except Exception:
+                    pass
+                
+                send_otp_email(
+                    email=email,
+                    otp_code=otp,
+                    action_type="password reset",
+                    expiry_minutes=5,
+                    user_name=user_name
                 )
                 print("Email sent successfully")
                 
@@ -2220,17 +2256,22 @@ class StudentSignupView(APIView):
             request.session['otp_created_at'] = datetime.now().timestamp()
 
             # Send OTP to email
-            send_mail(
-                subject="Your Student Registration OTP",
-                message=f"Your OTP code for student registration is {otp}",
-                from_email=settings.EMAIL_HOST_USER,
-                recipient_list=[email],
-                fail_silently=False,
-            )
-
-            return Response({"message": "OTP sent successfully"}, status=status.HTTP_200_OK)
+            try:
+                send_otp_email(
+                    email=email,
+                    otp_code=otp,
+                    action_type="student registration",
+                    expiry_minutes=5
+                )
+                return Response({"message": "OTP sent to email"}, status=status.HTTP_200_OK)
+            except Exception as e:
+                return Response(
+                    {"error": "Failed to send OTP", "details": str(e)}, 
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+                
         except Exception as e:
-            return Response({"error": "Failed to send OTP", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"error": "Failed to process request", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 # ---- Verify OTP for Student User ----
@@ -2271,8 +2312,8 @@ class VerifyStudentOTPView(APIView):
                 return Response({"error": "Invalid registration type"}, status=status.HTTP_400_BAD_REQUEST)
 
             # Check OTP expiration (10 minutes)
-            otp_created_at = request.session.get('otp_created_at')
-            if not otp_created_at or (datetime.now().timestamp() - otp_created_at) > 600:
+            created_at = request.session.get('otp_created_at')
+            if not created_at or (datetime.now().timestamp() - created_at) > 600:
                 return Response({"error": "OTP expired. Please request a new one"}, status=status.HTTP_400_BAD_REQUEST)
 
             if otp != request.session.get('signup_otp'):
@@ -2388,7 +2429,7 @@ class SendOTPView(APIView):
         try:
             serializer = SendOTPSerializer(data=request.data)
             if not serializer.is_valid():
-                return Response({"error": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
             email = serializer.validated_data["email"]
             user_type = serializer.validated_data["user_type"]
@@ -2400,37 +2441,31 @@ class SendOTPView(APIView):
             # Generate 6-digit OTP
             otp = "".join([str(random.randint(0, 9)) for _ in range(6)])
 
-            # Store OTP and registration details in Redis (valid for 10 minutes)
-            otp_data = {
-                "otp": otp,
-                "user_type": user_type,
-                "created_at": datetime.now().timestamp()
-            }
-            redis_client.setex(f"signup_otp:{email}", 600, json.dumps(otp_data))
-
-            # Set appropriate subject based on user_type
-            if user_type == 'individual':
-                subject = "Your Individual Registration OTP"
-                message = f"Your OTP code for individual registration is {otp}"
-            elif user_type == 'company':
-                subject = "Your Company Registration OTP"
-                message = f"Your OTP code for company registration is {otp}"
-            else:  # student
-                subject = "Your Student Registration OTP"
-                message = f"Your OTP code for student registration is {otp}"
-
-            # Send OTP to email
-            send_mail(
-                subject=subject,
-                message=message,
-                from_email=settings.EMAIL_HOST_USER,
-                recipient_list=[email],
-                fail_silently=False,
-            )
-
-            return Response({"message": "OTP sent successfully"}, status=status.HTTP_200_OK)
+            # Store OTP in Redis (valid for 5 minutes)
+            redis_client.setex(f"otp:{email}", 300, otp)
+            
+            # Also store user_type in Redis for later reference
+            redis_client.setex(f"signup_type:{email}", 300, user_type)
+            
+            # Determine appropriate action type for the email
+            action_type = f"{user_type} registration"
+            
+            # Send OTP email
+            try:
+                send_otp_email(
+                    email=email,
+                    otp_code=otp,
+                    action_type=action_type,
+                    expiry_minutes=5
+                )
+                return Response({"message": "OTP sent to email"}, status=status.HTTP_200_OK)
+            except Exception as e:
+                return Response(
+                    {"error": "Failed to send OTP", "details": str(e)}, 
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
         except Exception as e:
-            return Response({"error": "Failed to send OTP", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"error": "Failed to process request", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 # ---- Verify OTP (Consolidated) ----
@@ -2454,7 +2489,7 @@ class VerifyOTPView(APIView):
         try:
             serializer = VerifyOTPSerializer(data=request.data)
             if not serializer.is_valid():
-                return Response({"error": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
             email = serializer.validated_data["email"]
             otp = serializer.validated_data["otp"]
@@ -2466,14 +2501,25 @@ class VerifyOTPView(APIView):
 
             otp_data = json.loads(otp_data_str)
 
-            # Check OTP expiration (10 minutes)
-            created_at = otp_data.get("created_at")
-            if not created_at or (datetime.now().timestamp() - created_at) > 600:
-                return Response({"error": "OTP expired. Please request a new one"}, status=status.HTTP_400_BAD_REQUEST)
-
-            # Compare OTP
-            if otp != otp_data.get("otp"):
-                return Response({"error": "Invalid OTP"}, status=status.HTTP_400_BAD_REQUEST)
+            # Verify OTP
+            otp_data_json = redis_client.get(f"signup_otp:{email}")
+            if not otp_data_json:
+                return Response({"errors": "OTP expired or not found"}, status=status.HTTP_400_BAD_REQUEST)
+                
+            try:
+                otp_data = json.loads(otp_data_json)
+            except json.JSONDecodeError:
+                return Response({"errors": "Invalid OTP data"}, status=status.HTTP_400_BAD_REQUEST)
+                
+            # Check if OTP matches
+            if otp_data.get("otp") != otp:
+                return Response({"errors": "Invalid OTP"}, status=status.HTTP_400_BAD_REQUEST)
+                
+            # Check if OTP is expired (10 minutes validity)
+            created_at = otp_data.get("created_at", 0)
+            now = datetime.now().timestamp()
+            if now - created_at > 600:  # 10 minutes
+                return Response({"errors": "OTP expired"}, status=status.HTTP_400_BAD_REQUEST)
 
             user_type = otp_data.get("user_type")
             if not user_type or user_type not in ['individual', 'company', 'student']:

@@ -1,0 +1,29 @@
+{% extends "email/base_email.html" %}
+
+{% block title %}Your Verification Code{% endblock %}
+
+{% block header %}
+    Verification Code
+{% endblock %}
+
+{% block content %}
+    <p>Hello{% if user_name %} {{ user_name }}{% endif %},</p>
+    
+    <p>Please use the verification code below to complete your {{ action_type }}:</p>
+    
+    <div style="background-color: #f7f9fa; border-radius: 8px; padding: 25px; margin: 30px 0; text-align: center;">
+        <div style="font-size: 32px; font-weight: 700; letter-spacing: 5px; color: #2c3e50; font-family: monospace;">{{ otp_code }}</div>
+    </div>
+    
+    <p>This code will expire in {{ expiry_minutes }} minutes.</p>
+    
+    <p>If you didn't request this code, please ignore this email or contact our support team if you believe this is a mistake.</p>
+    
+    <p>For security reasons, please do not share this code with anyone.</p>
+{% endblock %}
+
+{% block cta %}
+    <p style="text-align: center;">
+        <a href="{{ action_url }}" class="button">Return to {{ site_name }}</a>
+    </p>
+{% endblock %} 

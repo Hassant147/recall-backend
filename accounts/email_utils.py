@@ -245,4 +245,37 @@ def send_welcome_email(user, user_type='individual'):
         template_name='email/welcome_user.html',
         context=context,
         recipient_list=[user.email]
+    )
+
+def send_otp_email(email, otp_code, action_type='registration', expiry_minutes=5, user_name=None):
+    """
+    Send a professionally-designed OTP email.
+    
+    Parameters:
+    - email: The recipient's email address
+    - otp_code: The OTP code to send
+    - action_type: What the OTP is for (e.g., 'registration', 'password reset')
+    - expiry_minutes: How many minutes until the OTP expires
+    - user_name: Optional user name for personalization
+    """
+    site_name = "Recall"
+    
+    context = {
+        'otp_code': otp_code,
+        'action_type': action_type,
+        'expiry_minutes': expiry_minutes,
+        'site_name': site_name,
+        'action_url': f"{settings.FRONTEND_URL}/login",
+        'user_name': user_name
+    }
+    
+    subject_prefix = "Verification Code"
+    if action_type.lower() == 'password reset':
+        subject_prefix = "Password Reset Code"
+    
+    return send_template_email(
+        subject=f"{subject_prefix} for {site_name}",
+        template_name='email/otp_code.html',
+        context=context,
+        recipient_list=[email]
     ) 
