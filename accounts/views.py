@@ -2498,15 +2498,13 @@ class VerifyOTPView(APIView):
             if not stored_otp:
                 return Response({"errors": "OTP expired or not found"}, status=status.HTTP_400_BAD_REQUEST)
             
-            # Compare OTP
-            if otp != stored_otp.decode('utf-8'):
+            # Compare OTP (note: stored_otp is already a string because decode_responses=True in Redis client)
+            if otp != stored_otp:
                 return Response({"errors": "Invalid OTP"}, status=status.HTTP_400_BAD_REQUEST)
             
             # Get user type
             user_type = redis_client.get(f"signup_type:{email}")
-            if user_type:
-                user_type = user_type.decode('utf-8')
-            else:
+            if not user_type:
                 user_type = "individual"  # Default fallback
             
             # Mark email as verified (valid for 30 minutes)
