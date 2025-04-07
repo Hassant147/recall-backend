@@ -857,7 +857,7 @@ class CreateCheckoutSessionView(APIView):
 class CheckSubscriptionView(APIView):
     authentication_classes = [CsrfExemptSessionAuthentication]
     permission_classes = [permissions.IsAuthenticated]
-    
+
     @swagger_auto_schema(
         operation_description="Gets the current user's subscription status and details",
         responses={
@@ -885,25 +885,40 @@ class CheckSubscriptionView(APIView):
     )
     def get(self, request):
         try:
-            user = request.user
+            subscription = Subscription.objects.get(user=request.user)
             
-            # Check if user has a subscription
-            from .models import Subscription
-            try:
-                subscription = Subscription.objects.get(user=user)
-                
-                # Get subscription data
-                subscription_data = {
-                    "is_active": subscription.status == 'active',
-                    "plan_id": subscription.plan_id,
-                    "plan_name": self.get_plan_name(subscription.plan_id),
+            # Map Stripe product IDs to internal plan IDs
+            plan_mapping = {
+                'prod_S4x9V4VOusZTNr': 'daily',           # Daily Plan
+                'prod_S4x9sR8V21WjNk': 'student_monthly', # Student Monthly Plan
+                'prod_S1ppgzI3mPdgy3': 'monthly',         # Monthly Plan
+                # Add other mappings as needed
+            }
+            
+            # Get the internal plan ID
+            internal_plan_id = plan_mapping.get(subscription.plan_id, subscription.plan_id)
+            
+            # Get the plan name
+            plan_name = self.get_plan_name(internal_plan_id)
+            
+            # Get the customer portal URL if available
+            customer_portal_url = None
+            if subscription.stripe_customer_id:
+                customer_portal_url = self.get_customer_portal_url(subscription.stripe_customer_id)
+            
+            return Response({
+                "subscription": {
+                    "is_active": subscription.is_active,
+                    "plan_id": internal_plan_id,
+                    "plan_name": plan_name,
                     "status": subscription.status,
                     "current_period_end": subscription.current_period_end.isoformat() if subscription.current_period_end else None,
-                    "customer_portal_url": self.get_customer_portal_url(subscription.stripe_customer_id) if subscription.stripe_customer_id else None
+                    "customer_portal_url": customer_portal_url
                 }
-            except Subscription.DoesNotExist:
-                # No subscription found, return default data
-                subscription_data = {
+            })
+        except Subscription.DoesNotExist:
+            return Response({
+                "subscription": {
                     "is_active": False,
                     "plan_id": "free",
                     "plan_name": "Free Plan",
@@ -911,11 +926,7 @@ class CheckSubscriptionView(APIView):
                     "current_period_end": None,
                     "customer_portal_url": None
                 }
-            
-            return Response({"subscription": subscription_data}, status=status.HTTP_200_OK)
-            
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            })
     
     def get_plan_name(self, plan_id):
         """Get a human-readable name for the plan"""
@@ -1909,37 +1920,55 @@ class CheckUserFeaturesView(APIView):
         }
     )
     def get(self, request):
-        user = request.user
-        
         try:
-            subscription = Subscription.objects.get(user=user)
+            subscription = Subscription.objects.get(user=request.user)
+            
+            # Map Stripe product IDs to internal plan IDs
+            plan_mapping = {
+                'prod_S4x9V4VOusZTNr': 'daily',           # Daily Plan
+                'prod_S4x9sR8V21WjNk': 'student_monthly', # Student Monthly Plan
+                'prod_S1ppgzI3mPdgy3': 'monthly',         # Monthly Plan
+                # Add other mappings as needed
+            }
+            
+            # Get the internal plan ID
+            internal_plan_id = plan_mapping.get(subscription.plan_id, subscription.plan_id)
+            
+            # Check if user can search
+            can_search, message = subscription.can_perform_search()
+            
+            # Check if user can export
+            can_export = subscription.can_export_summaries()
+            
+            # Get search limit and remaining searches
+            search_limit = -1  # Unlimited for paid plans
+            searches_remaining = -1  # Unlimited for paid plans
+            
+            if internal_plan_id == 'free':
+                search_limit = 3
+                searches_remaining = 3 - UserSearchCount.get_search_count(request.user)
+            
+            return Response({
+                "can_search": can_search,
+                "can_export": can_export,
+                "search_limit": search_limit,
+                "searches_remaining": searches_remaining,
+                "plan": internal_plan_id,
+                "message": message
+            })
         except Subscription.DoesNotExist:
-            # Create a free subscription for the user if none exists
-            subscription = Subscription.objects.create(
-                user=user,
-                plan_id='free',
-                status='active'
-            )
-        
-        # Get search count for the day
-        current_search_count = UserSearchCount.get_search_count(user)
-        
-        # Determine search limit based on plan
-        search_limit = 3 if subscription.plan_id == 'free' else float('inf')  # unlimited for paid plans
-        searches_remaining = max(0, search_limit - current_search_count) if search_limit != float('inf') else -1  # -1 indicates unlimited
-        
-        # Check if user can perform search and export summaries
-        can_search, error_message = subscription.can_perform_search()
-        can_export = subscription.can_export_summaries()
-        
-        return Response({
-            "can_search": can_search,
-            "can_export": can_export,
-            "search_limit": 3 if search_limit != float('inf') else -1,  # -1 indicates unlimited
-            "searches_remaining": searches_remaining,
-            "plan": subscription.plan_id,
-            "message": error_message
-        }, status=status.HTTP_200_OK)
+            # No subscription found, user is on free plan
+            search_limit = 3
+            searches_remaining = 3 - UserSearchCount.get_search_count(request.user)
+            
+            return Response({
+                "can_search": searches_remaining > 0,
+                "can_export": False,
+                "search_limit": search_limit,
+                "searches_remaining": searches_remaining,
+                "plan": "free",
+                "message": "You're on the free plan. Upgrade to get unlimited searches and more features."
+            })
 
 @method_decorator(csrf_exempt, name='dispatch')
 class CheckExportPermissionView(APIView):
