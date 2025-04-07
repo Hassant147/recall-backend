@@ -41,7 +41,7 @@ from .serializers import (
     CustomUserSerializer, IndividualUserSerializer, CompanySerializer, EmployeeSerializer, StudentUserSerializer,
     ForgotPasswordSerializer, ResetPasswordSerializer, ChangePasswordSerializer,
     EmployeeInviteSerializer, CompleteEmployeeRegistrationSerializer, EmployeeListSerializer,
-    SendOTPSerializer
+    SendOTPSerializer, QuerySerializer
 )
 
 load_dotenv()
@@ -612,137 +612,153 @@ class SaveQueryView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @swagger_auto_schema(
+        operation_description="Save a new query and its response",
         request_body=openapi.Schema(
             type=openapi.TYPE_OBJECT,
             properties={
-                "query": openapi.Schema(type=openapi.TYPE_STRING),
-                "result": openapi.Schema(
-                    type=openapi.TYPE_OBJECT,
-                    properties={
-                        "corrected_query": openapi.Schema(type=openapi.TYPE_STRING),
-                        "summary": openapi.Schema(type=openapi.TYPE_STRING),
-                        "references": openapi.Schema(
-                            type=openapi.TYPE_ARRAY,
-                            items=openapi.Schema(type=openapi.TYPE_OBJECT)
-                        ),
-                        "main_sources": openapi.Schema(
-                            type=openapi.TYPE_ARRAY,
-                            items=openapi.Schema(type=openapi.TYPE_OBJECT)
-                        ),
-                    }
-                )
+                'query': openapi.Schema(type=openapi.TYPE_STRING),
+                'corrected_query': openapi.Schema(type=openapi.TYPE_STRING, nullable=True),
+                'documents': openapi.Schema(
+                    type=openapi.TYPE_ARRAY,
+                    items=openapi.Schema(
+                        type=openapi.TYPE_OBJECT,
+                        properties={
+                            'pdf_name': openapi.Schema(type=openapi.TYPE_STRING),
+                            'page_number': openapi.Schema(type=openapi.TYPE_NUMBER),
+                            'pdf_url': openapi.Schema(type=openapi.TYPE_STRING)
+                        }
+                    )
+                ),
+                'summary': openapi.Schema(type=openapi.TYPE_STRING)
             },
-            required=["query", "result"]
+            required=['query', 'documents', 'summary']
         ),
         responses={
-            201: openapi.Response("Query saved"),
-            400: "Invalid input",
-            402: "Payment required"
+            201: openapi.Response("Query saved successfully", QuerySerializer),
+            400: "Invalid request data",
+            401: "Authentication required"
         }
     )
     def post(self, request):
-        print(f"SaveQueryView received data: {request.data}")
-        data = request.data
-
-        query_text = data.get("query", "")
-        
-        # Extract data from the nested result object
-        result = data.get("result", {})
-        corrected_query = result.get("corrected_query", "")
-        summary = result.get("summary", "")
-        references = result.get("references", [])
-
-        if not query_text:
-            return Response({"error": "Query is required."}, status=status.HTTP_400_BAD_REQUEST)
-
-        user_instance = CustomUser.objects.get(pk=request.user.pk)
-        
-        # Check user's subscription status and search limits
         try:
-            subscription = Subscription.objects.get(user=user_instance)
-        except Subscription.DoesNotExist:
-            # Create a free subscription for the user if none exists
-            subscription = Subscription.objects.create(
-                user=user_instance,
-                plan_id='free',
-                status='active'
+            # Validate required fields
+            if not all(key in request.data for key in ['query', 'documents', 'summary']):
+                return Response(
+                    {"error": "Missing required fields: query, documents, and summary are required"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Create the query
+            query = Query.objects.create(
+                user=request.user,
+                query=request.data['query'],
+                corrected_query=request.data.get('corrected_query'),
+                documents=request.data['documents'],
+                summary=request.data['summary']
             )
-        
-        # Check if user can perform search
-        can_search, error_message = subscription.can_perform_search()
-        if not can_search:
+
+            return Response(QuerySerializer(query).data, status=status.HTTP_201_CREATED)
+
+        except Exception as e:
             return Response(
-                {"error": error_message, "upgrade_required": True}, 
-                status=status.HTTP_402_PAYMENT_REQUIRED
+                {"error": f"Failed to save query: {str(e)}"},
+                status=status.HTTP_400_BAD_REQUEST
             )
-        
-        # Increment search count for the user
-        UserSearchCount.increment_search_count(user_instance)
-
-        # Print debug information
-        print(f"Saving query with summary: {summary[:100]}...")
-        print(f"Saving query with references: {references}")
-
-        query = Query.objects.create(
-            user=user_instance,
-            query=query_text,
-            response_text=json.dumps(data),  # Store the entire data as JSON string
-            summary=summary,
-            corrected_query=corrected_query,
-            references=references
-        )
-
-        return Response(
-            {"message": "Query saved", "query_id": query.query_id},
-            status=status.HTTP_201_CREATED
-        )
 
 @method_decorator(csrf_exempt, name='dispatch')
 class GetQueriesByUserView(APIView):
     authentication_classes = [CsrfExemptSessionAuthentication]
     permission_classes = [permissions.IsAuthenticated]
 
+    @swagger_auto_schema(
+        operation_description="Gets all queries for the current user",
+        responses={
+            200: openapi.Response(
+                description="Queries retrieved successfully",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        "queries": openapi.Schema(
+                            type=openapi.TYPE_ARRAY,
+                            items=openapi.Schema(
+                                type=openapi.TYPE_OBJECT,
+                                properties={
+                                    "query_id": openapi.Schema(type=openapi.TYPE_STRING, format=openapi.FORMAT_UUID),
+                                    "query": openapi.Schema(type=openapi.TYPE_STRING),
+                                    "created_at": openapi.Schema(type=openapi.TYPE_STRING, format="date-time")
+                                }
+                            )
+                        )
+                    }
+                )
+            ),
+            404: "User not found"
+        }
+    )
     def get(self, request):
-        user = request.user
         try:
-            user = CustomUser.objects.get(email=user)
-        except CustomUser.DoesNotExist:
-            raise NotFound(f"User {user} not found.")
-
-        queries = Query.objects.filter(user=user)
-        query_list = [
-            {
-                "query_id": query.query_id,
-                "query": query.query,
-            }
-            for query in queries
-        ]
-        return Response({"queries": query_list}, status=status.HTTP_200_OK)
-
+            # Get all queries for the user
+            queries = Query.objects.filter(user=request.user).order_by('-created_at')
+            
+            # Format the response
+            query_list = [
+                {
+                    "query_id": str(query.query_id),
+                    "query": query.query,
+                    "created_at": query.created_at.isoformat()
+                }
+                for query in queries
+            ]
+            
+            return Response({"queries": query_list}, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response(
+                {"error": f"Failed to retrieve queries: {str(e)}"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
 @method_decorator(csrf_exempt, name='dispatch')
 class GetQueryResponseByIdView(APIView):
     authentication_classes = [CsrfExemptSessionAuthentication]
     permission_classes = [permissions.IsAuthenticated]
+    
+    @swagger_auto_schema(
+        operation_description="Gets a specific query by ID",
+        manual_parameters=[
+            openapi.Parameter(
+                'query_id', 
+                openapi.IN_PATH, 
+                description="ID of the query", 
+                type=openapi.TYPE_STRING, 
+                format=openapi.FORMAT_UUID
+            )
+        ],
+        responses={
+            200: openapi.Response("Query details retrieved successfully", QuerySerializer),
+            404: "Query not found",
+            403: "Access denied"
+        }
+    )
     def get(self, request, query_id):
         try:
             query = Query.objects.get(query_id=query_id)
             
-            # Print debug information
-            print(f"Retrieved query: {query.query_id}")
-            print(f"Summary: {query.summary[:100] if query.summary else 'None'}")
-            print(f"References: {query.references}")
+            # Check if the query belongs to the user
+            if query.user != request.user:
+                return Response(
+                    {"error": "You don't have permission to access this query"},
+                    status=status.HTTP_403_FORBIDDEN
+                )
             
-            query_response = {
-                "query_id": query.query_id,
-                "query": query.query,
-                "corrected_query": query.corrected_query or "",
-                "summary": query.summary or "",
-                "references": query.references or []
-            }
-            return Response(query_response, status=status.HTTP_200_OK)
+            # Use the serializer to format the response
+            return Response(QuerySerializer(query).data)
+            
         except Query.DoesNotExist:
-            raise NotFound(f"Query with id {query_id} not found.")
+            return Response(
+                {"error": "Query not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
 
 @method_decorator(csrf_exempt, name='dispatch')
 class CreateCheckoutSessionView(APIView):
@@ -2454,5 +2470,46 @@ class SyncStripeTransactionsView(APIView):
             return Response(
                 {"error": f"Error syncing transactions: {str(e)}"}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+@method_decorator(csrf_exempt, name='dispatch')
+class QueryDetailView(APIView):
+    authentication_classes = [CsrfExemptSessionAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="Get details of a specific query",
+        manual_parameters=[
+            openapi.Parameter(
+                'query_id', 
+                openapi.IN_PATH, 
+                description="ID of the query", 
+                type=openapi.TYPE_STRING, 
+                format=openapi.FORMAT_UUID
+            )
+        ],
+        responses={
+            200: openapi.Response("Query details retrieved successfully", QuerySerializer),
+            404: "Query not found",
+            403: "Access denied"
+        }
+    )
+    def get(self, request, query_id):
+        try:
+            query = Query.objects.get(query_id=query_id)
+            
+            # Check if the query belongs to the user
+            if query.user != request.user:
+                return Response(
+                    {"error": "You don't have permission to access this query"},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            
+            return Response(QuerySerializer(query).data)
+            
+        except Query.DoesNotExist:
+            return Response(
+                {"error": "Query not found"},
+                status=status.HTTP_404_NOT_FOUND
             )
 

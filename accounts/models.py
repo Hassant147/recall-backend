@@ -101,15 +101,16 @@ class Employee(models.Model):
 
 class Query(models.Model):
     query_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='queries')
     query = models.TextField()
-    response_text = models.TextField()
-    summary = models.TextField(null=True, blank=True)
     corrected_query = models.TextField(null=True, blank=True)
-    references = models.JSONField(null=True, blank=True)
-    timestamp = models.DateTimeField(auto_now_add=True)
+    documents = models.JSONField(default=list)  # Store list of document references
+    summary = models.TextField(default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
     def __str__(self):
-        return self.query
+        return f"{self.user.email} - {self.query[:50]}..."
 
 class SubscriptionPlan(models.Model):
     plan_id = models.CharField(max_length=50, primary_key=True)

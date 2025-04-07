@@ -62,15 +62,10 @@ class AddEmployeeSerializer(serializers.Serializer):
 
 
 class QuerySerializer(serializers.ModelSerializer):
-    # Expose fields with custom names for the API if needed.
-    # Here we're mapping 'query' to the model's 'query_text' field,
-    # and 'response' to 'response_text'.
-    query = serializers.CharField(source="query_text")
-    response = serializers.CharField(source="response_text")
-
     class Meta:
         model = Query
-        fields = ("query", "response")
+        fields = ['query_id', 'query', 'corrected_query', 'documents', 'summary', 'created_at', 'updated_at']
+        read_only_fields = ['query_id', 'created_at', 'updated_at']
 
 
 class LoginSerializer(serializers.Serializer):

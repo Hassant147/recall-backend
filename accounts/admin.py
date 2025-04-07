@@ -85,15 +85,13 @@ class EmployeeAdmin(admin.ModelAdmin):
     company_name.short_description = 'Company'
     company_name.admin_order_field = 'company__name'
 
+@admin.register(Query)
 class QueryAdmin(admin.ModelAdmin):
-    list_display = ('user_email', 'query', 'timestamp')
-    search_fields = ('user__email', 'query', 'response_text', 'summary')
-    date_hierarchy = 'timestamp'
-    
-    def user_email(self, obj):
-        return obj.user.email
-    user_email.short_description = 'User Email'
-    user_email.admin_order_field = 'user__email'
+    list_display = ('query_id', 'user', 'query', 'created_at')
+    list_filter = ('created_at',)
+    search_fields = ('query', 'user__email')
+    date_hierarchy = 'created_at'
+    readonly_fields = ('query_id', 'created_at', 'updated_at')
 
 class SubscriptionPlanAdmin(admin.ModelAdmin):
     list_display = ('plan_id', 'name', 'price', 'validity', 'is_popular')
@@ -248,7 +246,6 @@ admin.site.register(IndividualUser, IndividualUserAdmin)
 admin.site.register(StudentUser, StudentUserAdmin)
 admin.site.register(Company, CompanyAdmin)
 admin.site.register(Employee, EmployeeAdmin)
-admin.site.register(Query, QueryAdmin)
 admin.site.register(SubscriptionPlan, SubscriptionPlanAdmin)
 admin.site.register(Subscription, SubscriptionAdmin)
 admin.site.register(Transaction, TransactionAdmin)
