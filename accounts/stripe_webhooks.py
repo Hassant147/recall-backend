@@ -8,7 +8,12 @@ from django.utils import timezone
 from datetime import datetime, timedelta
 import os
 
-from .models import CustomUser, Subscription, Transaction
+from .models import CustomUser, Subscription, Transaction, SubscriptionPlan
+from .email_utils import (
+    send_subscription_invoice_email,
+    send_subscription_renewed_email,
+    send_subscription_cancelled_email
+)
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
 TESTING_MODE = os.getenv('TESTING_MODE', 'false').lower() == 'true'
@@ -153,6 +158,27 @@ def handle_invoice_payment_succeeded(event):
         # Record the transaction
         create_transaction_from_invoice(subscription.user, invoice)
         
+        # Determine if this is a renewal or new subscription
+        is_renewal = False
+        if subscription.current_period_start and subscription.current_period_start < timezone.now() - timedelta(days=1):
+            is_renewal = True
+            
+        # Get plan name
+        plan_name = subscription.plan_id.replace('_', ' ').title()  # Default fallback
+        try:
+            plan = SubscriptionPlan.objects.get(plan_id=subscription.plan_id)
+            plan_name = plan.name
+        except SubscriptionPlan.DoesNotExist:
+            pass
+            
+        # Send appropriate email
+        if is_renewal:
+            # Send renewal email
+            send_subscription_renewed_email(subscription.user, invoice, plan_name)
+        else:
+            # Send initial subscription email
+            send_subscription_invoice_email(subscription.user, invoice, plan_name)
+        
     except Subscription.DoesNotExist:
         # Subscription not found in our database
         return
@@ -175,6 +201,17 @@ def handle_subscription_deleted(event):
         # Update the subscription status
         subscription.status = 'canceled'
         subscription.save()
+        
+        # Get plan name
+        plan_name = subscription.plan_id.replace('_', ' ').title()  # Default fallback
+        try:
+            plan = SubscriptionPlan.objects.get(plan_id=subscription.plan_id)
+            plan_name = plan.name
+        except SubscriptionPlan.DoesNotExist:
+            pass
+            
+        # Send cancellation email
+        send_subscription_cancelled_email(subscription.user, subscription, plan_name)
         
     except Subscription.DoesNotExist:
         # Subscription not found in our database

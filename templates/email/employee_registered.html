@@ -1,0 +1,29 @@
+{% extends "email/base_email.html" %}
+
+{% block title %}New Employee Registration{% endblock %}
+
+{% block header %}
+    New Employee Registered
+{% endblock %}
+
+{% block content %}
+    <p>Hello {{ company_name }},</p>
+    
+    <p>A new employee has successfully registered on your company account.</p>
+    
+    <p>Employee details:</p>
+    <ul style="padding-left: 20px;">
+        <li><strong>Name:</strong> {{ employee_name }}</li>
+        <li><strong>Email:</strong> {{ employee_email }}</li>
+        <li><strong>Position:</strong> {{ employee_position }}</li>
+        <li><strong>Registration Date:</strong> {{ registration_date }}</li>
+    </ul>
+    
+    <p>The employee now has access to your company's subscription plan and can begin using Recall's features. You can manage your employees anytime through your company dashboard.</p>
+{% endblock %}
+
+{% block cta %}
+    <p style="text-align: center;">
+        <a href="{{ dashboard_url }}" class="button">View Company Dashboard</a>
+    </p>
+{% endblock %} 

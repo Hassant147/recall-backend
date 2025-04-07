@@ -44,6 +44,14 @@ from .serializers import (
     SendOTPSerializer, QuerySerializer
 )
 
+# Import email utils at the top of the file
+from .email_utils import (
+    send_employee_registration_email, 
+    send_subscription_invoice_email,
+    send_subscription_renewed_email,
+    send_subscription_cancelled_email
+)
+
 load_dotenv()
 EMPLOYEE_LIMIT = int(os.getenv("EMPLOYEE_LIMIT", 10))
 stripe.api_key = settings.STRIPE_SECRET_KEY
@@ -1377,6 +1385,13 @@ class CompleteEmployeeRegistrationView(APIView):
             
             # Clean up Redis
             redis_client.delete(f"invite:{invite_token}")
+            
+            # Send email notification to company
+            try:
+                send_employee_registration_email(employee, company)
+            except Exception as e:
+                # Log the error but don't fail registration
+                print(f"Failed to send employee registration email: {str(e)}")
             
             # Automatically log the user in
             user = authenticate(request, email=email, password=data["password"])

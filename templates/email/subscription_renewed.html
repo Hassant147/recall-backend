@@ -1,0 +1,48 @@
+{% extends "email/base_email.html" %}
+
+{% block title %}Subscription Renewed{% endblock %}
+
+{% block header %}
+    Your Subscription Has Been Renewed
+{% endblock %}
+
+{% block content %}
+    <p>Hello {{ user_name }},</p>
+    
+    <p>This is a confirmation that your <span class="highlight">{{ plan_name }}</span> subscription has been automatically renewed.</p>
+    
+    <div style="background-color: #f7f9fa; border-radius: 5px; padding: 15px; margin: 20px 0;">
+        <h3 style="margin-top: 0;">Renewal Information</h3>
+        <table style="width: 100%; border-collapse: collapse;">
+            <tr>
+                <td style="padding: 8px 0;"><strong>Plan:</strong></td>
+                <td style="padding: 8px 0; text-align: right;">{{ plan_name }}</td>
+            </tr>
+            <tr>
+                <td style="padding: 8px 0;"><strong>Amount Charged:</strong></td>
+                <td style="padding: 8px 0; text-align: right;">${{ amount }}</td>
+            </tr>
+            <tr>
+                <td style="padding: 8px 0;"><strong>Billing Date:</strong></td>
+                <td style="padding: 8px 0; text-align: right;">{{ billing_date }}</td>
+            </tr>
+            <tr>
+                <td style="padding: 8px 0;"><strong>Next Renewal:</strong></td>
+                <td style="padding: 8px 0; text-align: right;">{{ next_billing_date }}</td>
+            </tr>
+        </table>
+    </div>
+    
+    <p>You can view your receipt and manage your subscription through your account dashboard. If you have any questions or concerns about this renewal, please contact our support team.</p>
+    
+    <p>Thank you for your continued support and trust in Recall!</p>
+{% endblock %}
+
+{% block cta %}
+    <p style="text-align: center;">
+        <a href="{{ receipt_url }}" class="button">View Receipt</a>
+    </p>
+    <p style="text-align: center; font-size: 14px; margin-top: 5px;">
+        <a href="{{ dashboard_url }}" style="color: #7f8c8d; text-decoration: none;">Manage your subscription</a>
+    </p>
+{% endblock %} 

@@ -1,0 +1,46 @@
+{% extends "email/base_email.html" %}
+
+{% block title %}Subscription Cancelled{% endblock %}
+
+{% block header %}
+    Your Subscription Has Been Cancelled
+{% endblock %}
+
+{% block content %}
+    <p>Hello {{ user_name }},</p>
+    
+    <p>We're writing to confirm that your Recall <span class="highlight">{{ plan_name }}</span> subscription has been cancelled as requested.</p>
+    
+    <div style="background-color: #f7f9fa; border-radius: 5px; padding: 15px; margin: 20px 0;">
+        <h3 style="margin-top: 0;">Cancellation Details</h3>
+        <table style="width: 100%; border-collapse: collapse;">
+            <tr>
+                <td style="padding: 8px 0;"><strong>Plan:</strong></td>
+                <td style="padding: 8px 0; text-align: right;">{{ plan_name }}</td>
+            </tr>
+            <tr>
+                <td style="padding: 8px 0;"><strong>Cancellation Date:</strong></td>
+                <td style="padding: 8px 0; text-align: right;">{{ cancellation_date }}</td>
+            </tr>
+            <tr>
+                <td style="padding: 8px 0;"><strong>Access Until:</strong></td>
+                <td style="padding: 8px 0; text-align: right;">{{ access_until }}</td>
+            </tr>
+        </table>
+    </div>
+    
+    <p>You will continue to have access to your {{ plan_name }} features until {{ access_until }}. After this date, your account will be downgraded to the free plan with limited features.</p>
+    
+    <p>We're sorry to see you go. If you wish to share any feedback about your experience with Recall, please reply to this email.</p>
+    
+    <p>If you change your mind, you can resubscribe anytime from your account dashboard.</p>
+{% endblock %}
+
+{% block cta %}
+    <p style="text-align: center;">
+        <a href="{{ dashboard_url }}" class="button">Manage Account</a>
+    </p>
+    <p style="text-align: center; font-size: 14px; margin-top: 5px;">
+        <a href="{{ resubscribe_url }}" style="color: #7f8c8d; text-decoration: none;">Resubscribe to {{ plan_name }}</a>
+    </p>
+{% endblock %} 
