@@ -15,6 +15,7 @@ import stripe
 import os
 import json
 import random
+import uuid
 from dotenv import load_dotenv
 from django.contrib.auth import get_user_model
 from uuid import uuid4
