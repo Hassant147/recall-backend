@@ -1347,7 +1347,7 @@ class InviteEmployeeView(APIView):
             )
             
             # Generate registration URL
-            registration_url = f"{settings.FRONTEND_URL}/complete-employee-registration?token={invite_token}"
+            registration_url = f"/complete-employee-registration?token={invite_token}"
             
             # Send invitation email
             try:
