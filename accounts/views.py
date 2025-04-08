@@ -1470,11 +1470,10 @@ class CompleteEmployeeRegistrationView(APIView):
             # Return employee data
             employee_data = {
                 "message": "Registration completed successfully",
-                "employee": EmployeeSerializer(employee).data
+                "employee": EmployeeSerializer(employee).data,
+                "is_employee": True,  # Add is_employee flag
+                "session_id": request.session.session_key
             }
-            
-            # Include session ID in response so frontend can store it
-            employee_data["session_id"] = request.session.session_key
             
             return Response(employee_data, status=status.HTTP_201_CREATED)
         except Exception as e:
