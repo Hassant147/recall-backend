@@ -289,9 +289,21 @@ def send_employee_invitation_email(email, company_name, registration_url):
         'registration_url': registration_url
     }
     
-    return send_template_email(
-        subject=f"Invitation to Join {company_name} on Recall",
-        template_name='email/employee_invitation.html',
-        context=context,
-        recipient_list=[email]
-    ) 
+    try:
+        html_message = render_to_string('email/employee_invitation.html', context)
+        
+        # Send the email with proper content type
+        send_mail(
+            subject=f"Invitation to Join {company_name} on Recall",
+            message='',  # Empty plain text version
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[email],
+            html_message=html_message,
+            fail_silently=False,
+        )
+        
+        logger.info(f"Employee invitation email sent to {email}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to send employee invitation email: {str(e)}")
+        return False 
