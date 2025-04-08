@@ -51,7 +51,8 @@ from .email_utils import (
     send_subscription_renewed_email,
     send_subscription_cancelled_email,
     send_welcome_email,
-    send_otp_email
+    send_otp_email,
+    send_employee_invitation_email
 )
 
 load_dotenv()
@@ -1300,66 +1301,76 @@ class InviteEmployeeView(APIView):
     )
     def post(self, request):
         try:
-            serializer = EmployeeInviteSerializer(data=request.data)
-            if not serializer.is_valid():
-                return Response({"errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
-                
-            email = serializer.validated_data["email"]
             user = request.user
             
             if not user.is_company:
-                return Response({"error": "Only company accounts can invite employees"}, status=status.HTTP_403_FORBIDDEN)
+                return Response(
+                    {"error": "Only company accounts can invite employees"}, 
+                    status=status.HTTP_403_FORBIDDEN
+                )
 
+            serializer = EmployeeInviteSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response({"errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+            
+            email = serializer.validated_data["email"]
+            
+            # Check if email is already registered
+            if CustomUser.objects.filter(email=email).exists():
+                return Response(
+                    {"error": "This email is already registered"}, 
+                    status=status.HTTP_409_CONFLICT
+                )
+            
+            # Get company
             try:
                 company = Company.objects.get(user=user)
             except Company.DoesNotExist:
-                return Response({"error": "Company profile not found"}, status=status.HTTP_404_NOT_FOUND)
-                
-            if company.employee_count() >= company.employee_limit:
-                return Response({"error": f"Employee limit reached ({company.employee_limit})"}, 
-                                status=status.HTTP_400_BAD_REQUEST)
-
-            # Check if email already exists
-            if CustomUser.objects.filter(email=email).exists():
                 return Response(
-                    {"error": "A user with this email already exists in the system. They cannot be invited as an employee."}, 
-                    status=status.HTTP_409_CONFLICT
+                    {"error": "Company profile not found"}, 
+                    status=status.HTTP_404_NOT_FOUND
                 )
-                                
-            # Generate a unique token for this invitation
-            invite_token = str(uuid4())
             
-            # Store invitation in Redis with 7-day expiry
+            # Generate invitation token
+            invite_token = str(uuid.uuid4())
+            
+            # Store invitation data in Redis (valid for 7 days)
             invitation_data = {
-                "company_id": str(company.user_id),
-                "company_name": company.name,
-                "email": email
+                "email": email,
+                "company_id": company.user_id
             }
-            redis_client.setex(f"invite:{invite_token}", 604800, json.dumps(invitation_data))  # 7 days
+            redis_client.setex(
+                f"invite:{invite_token}", 
+                7 * 24 * 60 * 60,  # 7 days in seconds
+                json.dumps(invitation_data)
+            )
             
-            # Generate invitation URL
-            # In a real-world scenario, this would be a frontend URL
-            # But for this example, we'll just include the token
-            invite_url = f"/complete-employee-registration?token={invite_token}"
+            # Generate registration URL
+            registration_url = f"{settings.FRONTEND_URL}/complete-employee-registration?token={invite_token}"
             
             # Send invitation email
-            send_mail(
-                subject=f"Invitation to join {company.name}",
-                message=f"Hello,\n\nYou have been invited to join {company.name} as an employee. "
-                f"Please click the following link to complete your registration:\n\n"
-                f"{invite_url}\n\n"
-                f"This invitation will expire in 7 days.",
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[email],
-                fail_silently=False,
-            )
-
+            try:
+                send_employee_invitation_email(
+                    email=email,
+                    company_name=company.name,
+                    registration_url=registration_url
+                )
+            except Exception as e:
+                logger.error(f"Failed to send employee invitation email: {str(e)}")
+                return Response(
+                    {"error": "Failed to send invitation email"}, 
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+            
             return Response({
-                "message": "Invitation sent to employee",
-                "invite_token": invite_token
+                "message": "Invitation sent successfully",
+                "email": email
             }, status=status.HTTP_200_OK)
         except Exception as e:
-            return Response({"error": "Failed to invite employee", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {"error": "Failed to invite employee", "details": str(e)}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 # ---- Complete Employee Registration ----
 @method_decorator(csrf_exempt, name='dispatch')

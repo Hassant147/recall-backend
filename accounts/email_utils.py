@@ -278,4 +278,20 @@ def send_otp_email(email, otp_code, action_type='registration', expiry_minutes=5
         template_name='email/otp_code.html',
         context=context,
         recipient_list=[email]
+    )
+
+def send_employee_invitation_email(email, company_name, registration_url):
+    """
+    Send invitation email to potential employee.
+    """
+    context = {
+        'company_name': company_name,
+        'registration_url': registration_url
+    }
+    
+    return send_template_email(
+        subject=f"Invitation to Join {company_name} on Recall",
+        template_name='email/employee_invitation.html',
+        context=context,
+        recipient_list=[email]
     ) 
