@@ -1891,15 +1891,15 @@ class RefreshSessionView(APIView):
                 return Response({"error": "No session ID provided"}, status=status.HTTP_400_BAD_REQUEST)
             
             # Load the session from the store
-            session_store = SessionStore(current_session_id)
+            session_store = SessionStore(session_key=current_session_id)
             
-            # Check if session exists and retrieve user_id
-            if not session_store.exists(current_session_id) or '_auth_user_id' not in session_store:
-                return Response({"error": "Invalid session"}, status=status.HTTP_401_UNAUTHORIZED)
-            
+            # Try to get the user ID from session
             user_id = session_store.get('_auth_user_id')
             
-            # Check if user still exists and is active
+            if not user_id:
+                return Response({"error": "Invalid session"}, status=status.HTTP_401_UNAUTHORIZED)
+            
+            # Check if user exists and is active
             try:
                 user = CustomUser.objects.get(pk=user_id)
                 if not user.is_active:
@@ -1907,16 +1907,33 @@ class RefreshSessionView(APIView):
             except CustomUser.DoesNotExist:
                 return Response({"error": "User not found"}, status=status.HTTP_401_UNAUTHORIZED)
             
-            # Create a new session for the user
-            login(request, user)
+            # Create a new session
+            request.session.flush()  # Clear any existing session
+            login(request, user)  # This creates a new session
             request.session.save()  # Ensure the session is saved
             
-            # Return the new session ID
-            return Response({"session_id": request.session.session_key}, status=status.HTTP_200_OK)
+            # Get the new session key
+            new_session_id = request.session.session_key
+            
+            # Add user type information
+            is_employee = False
+            try:
+                employee = Employee.objects.get(user=user)
+                is_employee = True
+            except Employee.DoesNotExist:
+                pass
+            
+            return Response({
+                "session_id": new_session_id,
+                "is_employee": is_employee
+            }, status=status.HTTP_200_OK)
             
         except Exception as e:
-            return Response({"error": "Session refresh failed", "details": str(e)}, 
-                           status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            print(f"Session refresh error: {str(e)}")  # Log the error
+            return Response(
+                {"error": "Session refresh failed", "details": str(e)}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 @method_decorator(csrf_exempt, name='dispatch')
