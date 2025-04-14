@@ -171,24 +171,51 @@ class LoginView(APIView):
             # Get user specific data based on user type
             user_data = {"user": CustomUserSerializer(user).data}
             
+            # Add name fields based on user type
+            name = None
+            first_name = None
+            last_name = None
+            
             # Check if user is an employee
             is_employee = False
             
             if user.is_company:
                 company = Company.objects.get(user=user)
                 user_data["profile"] = CompanySerializer(company).data
+                name = company.name
             else:
                 try:
                     student = StudentUser.objects.get(user=user)
                     user_data["profile"] = StudentUserSerializer(student).data
+                    first_name = student.first_name
+                    last_name = student.last_name
+                    name = f"{first_name} {last_name}"
                 except StudentUser.DoesNotExist:
                     try:
                         employee = Employee.objects.get(user=user)
                         user_data["profile"] = EmployeeSerializer(employee).data
                         is_employee = True
+                        first_name = employee.first_name
+                        last_name = employee.last_name
+                        name = f"{first_name} {last_name}"
                     except Employee.DoesNotExist:
-                        user_data["profile"] = None
+                        try:
+                            individual = IndividualUser.objects.get(user=user)
+                            user_data["profile"] = IndividualUserSerializer(individual).data
+                            first_name = individual.first_name
+                            last_name = individual.last_name
+                            name = f"{first_name} {last_name}"
+                        except IndividualUser.DoesNotExist:
+                            user_data["profile"] = None
             
+            # Add names to the response data
+            if name:
+                user_data["user"]["name"] = name
+            if first_name:
+                user_data["user"]["first_name"] = first_name
+            if last_name:
+                user_data["user"]["last_name"] = last_name
+                
             # Add is_employee flag to response
             user_data["is_employee"] = is_employee
             
@@ -1915,18 +1942,61 @@ class RefreshSessionView(APIView):
             # Get the new session key
             new_session_id = request.session.session_key
             
-            # Add user type information
-            is_employee = False
-            try:
-                employee = Employee.objects.get(user=user)
-                is_employee = True
-            except Employee.DoesNotExist:
-                pass
-            
-            return Response({
+            # Get user details including name based on user type
+            response_data = {
                 "session_id": new_session_id,
-                "is_employee": is_employee
-            }, status=status.HTTP_200_OK)
+                "user": CustomUserSerializer(user).data
+            }
+            
+            # Add name fields based on user type
+            name = None
+            first_name = None
+            last_name = None
+            
+            # Check if user is an employee
+            is_employee = False
+            
+            if user.is_company:
+                company = Company.objects.get(user=user)
+                response_data["profile"] = CompanySerializer(company).data
+                name = company.name
+            else:
+                try:
+                    student = StudentUser.objects.get(user=user)
+                    response_data["profile"] = StudentUserSerializer(student).data
+                    first_name = student.first_name
+                    last_name = student.last_name
+                    name = f"{first_name} {last_name}"
+                except StudentUser.DoesNotExist:
+                    try:
+                        employee = Employee.objects.get(user=user)
+                        response_data["profile"] = EmployeeSerializer(employee).data
+                        is_employee = True
+                        first_name = employee.first_name
+                        last_name = employee.last_name
+                        name = f"{first_name} {last_name}"
+                    except Employee.DoesNotExist:
+                        try:
+                            individual = IndividualUser.objects.get(user=user)
+                            response_data["profile"] = IndividualUserSerializer(individual).data
+                            first_name = individual.first_name
+                            last_name = individual.last_name
+                            name = f"{first_name} {last_name}"
+                        except IndividualUser.DoesNotExist:
+                            response_data["profile"] = None
+            
+            # Add names to the response data
+            if name:
+                response_data["user"]["name"] = name
+            if first_name:
+                response_data["user"]["first_name"] = first_name
+            if last_name:
+                response_data["user"]["last_name"] = last_name
+            
+            # Add is_employee flag
+            response_data["is_employee"] = is_employee
+            
+            return Response(response_data, status=status.HTTP_200_OK)
             
         except Exception as e:
             print(f"Session refresh error: {str(e)}")  # Log the error
@@ -1934,7 +2004,6 @@ class RefreshSessionView(APIView):
                 {"error": "Session refresh failed", "details": str(e)}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-
 
 @method_decorator(csrf_exempt, name='dispatch')
 class SessionStatusView(APIView):
