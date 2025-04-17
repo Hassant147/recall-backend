@@ -38,7 +38,8 @@ class StudentSignupDataSerializer(serializers.Serializer):
     last_name = serializers.CharField()
     phone_number = serializers.CharField()
     date_of_birth = serializers.DateField()
-    student_id = serializers.CharField()
+    student_id = serializers.FileField(required=False)
+    student_id_text = serializers.CharField(required=False, allow_blank=True)
     student_organisation_name = serializers.CharField()
     terms_and_conditions = serializers.BooleanField()
 
@@ -91,7 +92,7 @@ class StudentUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = StudentUser
         fields = ('user', 'first_name', 'last_name', 'phone_number', 'date_of_birth', 
-                 'student_id', 'student_organisation_name', 'date_joined', 'is_approved')
+                 'student_id', 'student_id_text', 'student_organisation_name', 'date_joined', 'is_approved')
 
 class CompanySerializer(serializers.ModelSerializer):
     user = CustomUserSerializer()

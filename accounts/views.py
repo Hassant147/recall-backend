@@ -10,6 +10,7 @@ from rest_framework.exceptions import NotFound, ValidationError, AuthenticationF
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, permissions
+from rest_framework.parsers import MultiPartParser, FormParser
 import redis
 import stripe
 import os
@@ -2432,6 +2433,7 @@ class CompleteStudentRegistrationView(APIView):
     """
     authentication_classes = [CsrfExemptSessionAuthentication]
     permission_classes = [permissions.AllowAny]
+    parser_classes = (MultiPartParser, FormParser)
     
     @swagger_auto_schema(
         operation_description="Student signup step 3: Complete registration with student details",
@@ -2465,17 +2467,24 @@ class CompleteStudentRegistrationView(APIView):
             )
 
             # Create StudentUser record
-            student = StudentUser.objects.create(
-                user=user,
-                first_name=serializer.validated_data["first_name"],
-                last_name=serializer.validated_data["last_name"],
-                phone_number=serializer.validated_data["phone_number"],
-                date_of_birth=serializer.validated_data["date_of_birth"],
-                student_id=serializer.validated_data["student_id"],
-                student_organisation_name=serializer.validated_data["student_organisation_name"],
-                terms_and_conditions=serializer.validated_data["terms_and_conditions"],
-                is_approved=False,  # Default to not approved
-            )
+            student_data = {
+                'user': user,
+                'first_name': serializer.validated_data["first_name"],
+                'last_name': serializer.validated_data["last_name"],
+                'phone_number': serializer.validated_data["phone_number"],
+                'date_of_birth': serializer.validated_data["date_of_birth"],
+                'student_organisation_name': serializer.validated_data["student_organisation_name"],
+                'terms_and_conditions': serializer.validated_data["terms_and_conditions"],
+                'is_approved': False,  # Default to not approved
+            }
+            
+            # Handle student ID (either file or text)
+            if 'student_id' in serializer.validated_data and serializer.validated_data['student_id']:
+                student_data['student_id'] = serializer.validated_data['student_id']
+            if 'student_id_text' in serializer.validated_data and serializer.validated_data['student_id_text']:
+                student_data['student_id_text'] = serializer.validated_data['student_id_text']
+                
+            student = StudentUser.objects.create(**student_data)
 
             # Clean up Redis
             redis_client.delete(f"verified:{email}")
