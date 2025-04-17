@@ -63,7 +63,6 @@ class StudentUser(models.Model):
     phone_number = models.CharField(max_length=15)
     date_of_birth = models.DateField()
     student_id = models.FileField(upload_to='student_ids/', null=True, blank=True)
-    student_id_text = models.CharField(max_length=100, null=True, blank=True)
     student_organisation_name = models.CharField(max_length=255)
     terms_and_conditions = models.BooleanField(default=False)
     date_joined = models.DateTimeField(auto_now_add=True)

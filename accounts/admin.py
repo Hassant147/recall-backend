@@ -42,7 +42,7 @@ class IndividualUserAdmin(admin.ModelAdmin):
 class StudentUserAdmin(admin.ModelAdmin):
     list_display = ('user_email', 'first_name', 'last_name', 'has_student_id', 'student_organisation_name', 'date_joined', 'is_approved')
     list_filter = ('is_approved',)
-    search_fields = ('user__email', 'first_name', 'last_name', 'student_id_text', 'student_organisation_name')
+    search_fields = ('user__email', 'first_name', 'last_name', 'student_organisation_name')
     date_hierarchy = 'date_joined'
     actions = ['approve_students', 'disapprove_students']
     
@@ -52,8 +52,8 @@ class StudentUserAdmin(admin.ModelAdmin):
     user_email.admin_order_field = 'user__email'
     
     def has_student_id(self, obj):
-        return bool(obj.student_id) or bool(obj.student_id_text)
-    has_student_id.short_description = 'Student ID'
+        return bool(obj.student_id)
+    has_student_id.short_description = 'Has ID Document'
     has_student_id.boolean = True
     
     def approve_students(self, request, queryset):
